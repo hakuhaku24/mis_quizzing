@@ -67,7 +67,7 @@ def transcribe_page(key: str, png: bytes) -> str:
             "User-Agent": "mis-grad-exam-coach/1.0",
         },
     )
-    for attempt in range(5):
+    for attempt in range(10):
         try:
             with urllib.request.urlopen(req, timeout=120) as r:
                 data = json.load(r)
@@ -75,10 +75,16 @@ def transcribe_page(key: str, png: bytes) -> str:
         except urllib.error.HTTPError as e:
             if e.code in (429, 500, 502, 503):
                 wait = int(e.headers.get("retry-after") or 2 ** (attempt + 2))
+                wait = min(wait + 5, 900)  # honor retry-after fully (daily/TPM buckets)
                 print(f"    HTTP {e.code}, retry in {wait}s", flush=True)
-                time.sleep(min(wait, 120))
+                time.sleep(wait)
                 continue
             raise
+        except (urllib.error.URLError, OSError, TimeoutError) as e:
+            wait = 2 ** (attempt + 2)
+            print(f"    network error ({e}), retry in {wait}s", flush=True)
+            time.sleep(wait)
+            continue
     raise RuntimeError("transcription failed after retries")
 
 
