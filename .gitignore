@@ -11,6 +11,7 @@ venv/
 dist/
 .DS_Store
 data/downloads/
+data/ocr/
 data/*.pdf
 data/*.db-shm
 data/*.db-wal
