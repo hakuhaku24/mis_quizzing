@@ -73,6 +73,28 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [regrading, setRegrading] = useState<number | null>(null);
+
+  const regrade = async (attemptId: number) => {
+    setRegrading(attemptId);
+    try {
+      const res = await fetch(`/api/attempts/${attemptId}/grade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: true }),
+      });
+      if (res.ok) {
+        const { grade } = await res.json();
+        setAttempts((prev) =>
+          prev.map((a) =>
+            a.id === attemptId ? { ...a, ai_score: grade.score, ai_feedback: JSON.stringify(grade) } : a
+          )
+        );
+      }
+    } finally {
+      setRegrading(null);
+    }
+  };
 
   const load = useCallback((p: number, t: string) => {
     setLoading(true);
@@ -201,13 +223,32 @@ export default function HistoryPage() {
                       </div>
                     )}
 
+                    {a.question_type !== "multiple_choice" && a.answer_text && !a.ai_feedback && (
+                      <button
+                        onClick={() => regrade(a.id)}
+                        disabled={regrading !== null}
+                        className="text-xs px-3 py-1.5 bg-violet-600 text-white rounded-lg disabled:opacity-40 hover:bg-violet-700"
+                      >
+                        {regrading === a.id ? "AI 批改中…" : "🤖 AI 批改"}
+                      </button>
+                    )}
+
                     {(() => {
                       if (!a.ai_feedback) return null;
                       let fb: AiFeedback;
                       try { fb = JSON.parse(a.ai_feedback); } catch { return null; }
                       return (
                         <div className="border border-violet-200 bg-violet-50/50 rounded-lg p-3 space-y-2 text-xs">
-                          <p className="font-semibold text-violet-700">AI 批改 — {fb.score}/10</p>
+                          <div className="flex items-center justify-between">
+                            <p className="font-semibold text-violet-700">AI 批改 — {fb.score}/10</p>
+                            <button
+                              onClick={() => regrade(a.id)}
+                              disabled={regrading !== null}
+                              className="text-violet-500 hover:text-violet-700 disabled:opacity-40"
+                            >
+                              {regrading === a.id ? "重新批改中…" : "🔄 重新批改"}
+                            </button>
+                          </div>
                           {fb.got_points.length > 0 && (
                             <p><span className="text-green-700 font-medium">✓ 有答到：</span><span className="text-gray-600">{fb.got_points.join("；")}</span></p>
                           )}
