@@ -1,6 +1,15 @@
 export type QuestionStatus = "new" | "learning" | "wrong" | "reviewing" | "mastered" | "skipped";
 export type Confidence = "low" | "medium" | "high";
 export type ErrorType = "concept" | "memory" | "careless" | "unseen";
+
+export interface AiGrade {
+  score: number; // 0-10
+  verdict: "correct" | "partial" | "wrong";
+  got_points: string[];
+  missing_points: string[];
+  wrong_points: string[];
+  feedback: string;
+}
 export type SolutionSourceType = "ai_draft" | "human_written" | "human_verified" | "teacher_verified" | "template";
 export type VerifiedStatus = "unverified" | "ai_draft" | "template" | "human_reviewed" | "human_verified" | "teacher_verified";
 

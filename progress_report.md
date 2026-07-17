@@ -1,6 +1,15 @@
-# Progress Report — Phase 1：作答資料採集
+# Progress Report — Phase 1：作答資料採集 + AI 批改
 
 日期：2026-07-17（前次：2026-05-23 Milestone 2）
+
+## Phase 2 先行：AI 批改申論（已完成）
+
+- `POST /api/attempts/[id]/grade`：把考生答案 + 題目 + 詳解丟給 Groq（預設 `openai/gpt-oss-120b`，可用 `GROQ_MODEL` 覆寫），回傳 0–10 分、判定（對/部分/錯）、有答到／漏掉／寫錯的要點、總評
+- 批改結果存入 `user_attempts.ai_score` / `ai_feedback`，同一 attempt 重複批改直接回快取（不重複計費）
+- 申論/簡答題作答後出現「🤖 AI 批改」按鈕；AI 判定部分/錯誤也會觸發錯因四選一
+- 成本：每次批改約 1,300 tokens（遠低於 0.01 美元）
+- 設定：`apps/web/.env.local` 放 `GROQ_API_KEY`（已 gitignore，不進版控）
+- Migration：`pipeline/db/migrate_phase2_ai.py`
 
 ## 目標
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { use } from "react";
-import type { Confidence, ErrorType, Question, Solution } from "@/lib/types";
+import type { AiGrade, Confidence, ErrorType, Question, Solution } from "@/lib/types";
 
 interface QuestionDetail extends Question {
   solutions?: Solution[];
@@ -50,6 +50,9 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
   const [selfAssessment, setSelfAssessment] = useState<SelfAssessment | null>(null);
   const [confidence, setConfidence]         = useState<Confidence | null>(null);
   const [errorType, setErrorType]           = useState<ErrorType | null>(null);
+  const [aiGrade, setAiGrade]               = useState<AiGrade | null>(null);
+  const [grading, setGrading]               = useState(false);
+  const [gradeError, setGradeError]         = useState<string | null>(null);
   const startTime = useState(() => Date.now())[0];
 
   useEffect(() => {
@@ -116,10 +119,31 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
     }
   };
 
-  // Wrong MC answer, or essay self-assessed as partial/wrong → ask why it went wrong
+  const handleGrade = async () => {
+    if (!attemptId || grading) return;
+    setGrading(true);
+    setGradeError(null);
+    try {
+      const res = await fetch(`/api/attempts/${attemptId}/grade`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setGradeError(data.error ?? "批改失敗");
+      } else {
+        setAiGrade(data.grade as AiGrade);
+      }
+    } catch {
+      setGradeError("批改失敗，請稍後再試");
+    }
+    setGrading(false);
+  };
+
+  // Wrong MC answer, or essay judged partial/wrong (by AI or self) → ask why it went wrong
   const needsErrorType =
     submitted &&
-    (isMC ? isCorrect === false : selfAssessment === "wrong" || selfAssessment === "partial");
+    (isMC
+      ? isCorrect === false
+      : selfAssessment === "wrong" || selfAssessment === "partial" ||
+        aiGrade?.verdict === "wrong" || aiGrade?.verdict === "partial");
 
   if (loading) return <div className="py-24 text-center text-gray-400">載入中…</div>;
   if (!question) return <div className="py-24 text-center text-gray-400">找不到題目</div>;
@@ -278,10 +302,67 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
               </div>
             )}
 
+            {/* AI grading for essay / short answer */}
+            {!isMC && (
+              <div className="space-y-3">
+                {!aiGrade ? (
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                      onClick={handleGrade}
+                      disabled={grading || !attemptId}
+                      className="px-5 py-2 bg-violet-600 text-white text-sm rounded-lg disabled:opacity-40 hover:bg-violet-700 transition-colors"
+                    >
+                      {grading ? "AI 批改中…" : "🤖 AI 批改"}
+                    </button>
+                    {gradeError && <span className="text-xs text-red-500">{gradeError}</span>}
+                  </div>
+                ) : (
+                  <div className="border border-violet-200 bg-violet-50/50 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl font-bold text-violet-700">{aiGrade.score}<span className="text-sm font-normal text-violet-400"> / 10</span></span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        aiGrade.verdict === "correct" ? "bg-green-100 text-green-700" :
+                        aiGrade.verdict === "partial" ? "bg-yellow-100 text-yellow-700" :
+                        "bg-red-100 text-red-700"
+                      }`}>
+                        {aiGrade.verdict === "correct" ? "答對" : aiGrade.verdict === "partial" ? "部分正確" : "答錯"}
+                      </span>
+                      <span className="text-xs text-gray-400 ml-auto">AI 批改</span>
+                    </div>
+                    {aiGrade.got_points.length > 0 && (
+                      <div className="text-sm space-y-1">
+                        <p className="font-medium text-green-700">✓ 有答到</p>
+                        <ul className="list-disc pl-5 text-gray-600 space-y-0.5">
+                          {aiGrade.got_points.map((p, i) => <li key={i}>{p}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {aiGrade.missing_points.length > 0 && (
+                      <div className="text-sm space-y-1">
+                        <p className="font-medium text-yellow-700">△ 漏掉的得分點</p>
+                        <ul className="list-disc pl-5 text-gray-600 space-y-0.5">
+                          {aiGrade.missing_points.map((p, i) => <li key={i}>{p}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {aiGrade.wrong_points.length > 0 && (
+                      <div className="text-sm space-y-1">
+                        <p className="font-medium text-red-700">✗ 寫錯的地方</p>
+                        <ul className="list-disc pl-5 text-gray-600 space-y-0.5">
+                          {aiGrade.wrong_points.map((p, i) => <li key={i}>{p}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    <p className="text-sm text-gray-600 border-t border-violet-100 pt-2">{aiGrade.feedback}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Essay self-assessment */}
             {!isMC && (
               <div className="space-y-2">
-                <p className="text-sm text-gray-500">對照詳解後，你覺得自己：</p>
+                <p className="text-sm text-gray-500">{aiGrade ? "（也可以手動自評）" : "或對照詳解後自評："}</p>
                 <div className="flex gap-2 flex-wrap">
                   {(["correct", "partial", "wrong"] as SelfAssessment[]).map((v) => {
                     const meta = {
