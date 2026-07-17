@@ -12,10 +12,19 @@ interface TopicStat {
   total: number;
   mc_correct: number;
   mc_wrong: number;
-  self_correct: number;
-  self_partial: number;
-  self_wrong: number;
-  correct_rate: number | null;
+  ai_graded: number;
+  avg_ai_score: number | null;
+  mastery: number | null;
+  correct_rate?: number | null;
+}
+
+interface ConceptStat {
+  concept: string;
+  topic: string;
+  total: number;
+  ai_graded: number;
+  avg_ai_score: number | null;
+  mastery: number | null;
 }
 
 interface Attempt {
@@ -30,13 +39,17 @@ interface Attempt {
   correct_option: string | null;
   is_correct: number | null;
   self_assessment: string | null;
+  ai_score: number | null;
   time_spent_seconds: number | null;
   created_at: string;
 }
 
 interface Analytics {
   totalAttempts: number;
+  aiGraded: number;
+  avgAiScore: number | null;
   topicStats: TopicStat[];
+  conceptStats: ConceptStat[];
   recentAttempts: Attempt[];
   weakTopics: TopicStat[];
 }
@@ -110,35 +123,56 @@ export default function AnalyticsPage() {
               })()}
             />
             <StatCard
-              label="弱點科目"
-              value={data.weakTopics.length > 0 ? TOPIC_LABELS[data.weakTopics[0].topic] ?? data.weakTopics[0].topic : "—"}
-              small
+              label="AI 批改平均"
+              value={data.avgAiScore != null ? `${data.avgAiScore.toFixed(1)}/10` : "—"}
             />
           </div>
 
           {/* Per-topic */}
           {data.topicStats.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-              <h2 className="font-semibold">各科表現</h2>
+              <h2 className="font-semibold">各科掌握度</h2>
+              <p className="text-xs text-gray-400">選擇題以對錯計、申論以 AI 分數（或自評）計的加權平均</p>
               <div className="space-y-4">
-                {data.topicStats.map((t) => {
-                  const graded = t.mc_correct + t.mc_wrong + t.self_correct + t.self_partial + t.self_wrong;
-                  const correct = t.mc_correct + t.self_correct;
-                  const rate = graded > 0 ? correct / graded : null;
-                  return (
-                    <div key={t.topic} className="space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">{TOPIC_LABELS[t.topic] ?? t.topic}</span>
-                        <span className="text-gray-400 text-xs">
-                          答 {t.total} 題 · 選擇 {t.mc_correct + t.mc_wrong} 題 · 申論 {t.self_correct + t.self_partial + t.self_wrong} 題自評
-                        </span>
-                      </div>
-                      {rate !== null ? <RateBar rate={rate} /> : (
-                        <p className="text-xs text-gray-400">尚無足夠已評分資料</p>
-                      )}
+                {data.topicStats.map((t) => (
+                  <div key={t.topic} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{TOPIC_LABELS[t.topic] ?? t.topic}</span>
+                      <span className="text-gray-400 text-xs">
+                        答 {t.total} 題
+                        {t.ai_graded > 0 && ` · AI 批改 ${t.ai_graded} 題，平均 ${t.avg_ai_score?.toFixed(1)}/10`}
+                      </span>
                     </div>
-                  );
-                })}
+                    {t.mastery !== null ? <RateBar rate={t.mastery} /> : (
+                      <p className="text-xs text-gray-400">尚無足夠已評分資料</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Concept mastery (weakest first) */}
+          {data.conceptStats.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+              <h2 className="font-semibold">知識點掌握度（由弱到強）</h2>
+              <div className="space-y-3">
+                {data.conceptStats.map((c) => (
+                  <div key={c.concept} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span>
+                        <Link href={`/questions?concept=${encodeURIComponent(c.concept)}`} className="font-medium hover:text-blue-600">
+                          #{c.concept}
+                        </Link>
+                        <span className="text-xs text-gray-400 ml-2">{TOPIC_LABELS[c.topic] ?? c.topic}</span>
+                      </span>
+                      <span className="text-gray-400 text-xs">
+                        {c.total} 次作答{c.ai_graded > 0 && ` · AI 平均 ${c.avg_ai_score?.toFixed(1)}/10`}
+                      </span>
+                    </div>
+                    <RateBar rate={c.mastery ?? 0} />
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -204,6 +238,10 @@ function AttemptRow({ attempt: a }: { attempt: Attempt }) {
       : a.is_correct === 0
         ? <span className="text-xs text-red-700 bg-red-100 px-2 py-0.5 rounded-full">答錯</span>
         : null
+    : a.ai_score != null
+      ? <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+          a.ai_score >= 7 ? "text-green-700 bg-green-100" : a.ai_score >= 4 ? "text-yellow-700 bg-yellow-100" : "text-red-700 bg-red-100"
+        }`}>AI {a.ai_score}/10</span>
     : a.self_assessment === "correct"
       ? <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">完全懂</span>
       : a.self_assessment === "partial"

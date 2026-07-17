@@ -7,6 +7,15 @@ const TOPIC_LABELS: Record<string, string> = {
   MIS: "管理資訊系統", DS: "資料結構", CS: "計算機概論", STAT: "統計學",
 };
 
+interface AiFeedback {
+  score: number;
+  verdict: string;
+  got_points: string[];
+  missing_points: string[];
+  wrong_points: string[];
+  feedback: string;
+}
+
 interface Attempt {
   id: number;
   question_id: number;
@@ -19,9 +28,20 @@ interface Attempt {
   correct_option: string | null;
   is_correct: number | null;
   self_assessment: string | null;
+  confidence: string | null;
+  error_type: string | null;
+  ai_score: number | null;
+  ai_feedback: string | null;
   time_spent_seconds: number | null;
   created_at: string;
   difficulty: number | null;
+}
+
+const CONFIDENCE_LABELS: Record<string, string> = { low: "沒把握", medium: "普通", high: "很有把握" };
+const ERROR_LABELS: Record<string, string> = { concept: "觀念不懂", memory: "記憶模糊", careless: "粗心", unseen: "沒看過" };
+
+function aiScoreBadgeCls(score: number) {
+  return score >= 7 ? "text-green-700 bg-green-100" : score >= 4 ? "text-yellow-700 bg-yellow-100" : "text-red-700 bg-red-100";
 }
 
 function formatDate(s: string) {
@@ -35,6 +55,8 @@ function ResultBadge({ attempt: a }: { attempt: Attempt }) {
     if (a.is_correct === 1) return <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full shrink-0">答對</span>;
     if (a.is_correct === 0) return <span className="text-xs text-red-700 bg-red-100 px-2 py-0.5 rounded-full shrink-0">答錯</span>;
   } else {
+    if (a.ai_score != null)
+      return <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 font-semibold ${aiScoreBadgeCls(a.ai_score)}`}>AI {a.ai_score}/10</span>;
     if (a.self_assessment === "correct") return <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full shrink-0">完全懂</span>;
     if (a.self_assessment === "partial")  return <span className="text-xs text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full shrink-0">部分懂</span>;
     if (a.self_assessment === "wrong")    return <span className="text-xs text-red-700 bg-red-100 px-2 py-0.5 rounded-full shrink-0">答錯</span>;
@@ -163,6 +185,42 @@ export default function HistoryPage() {
                         </div>
                       )
                     )}
+
+                    {(a.confidence || a.error_type) && (
+                      <div className="flex gap-2 flex-wrap text-xs">
+                        {a.confidence && (
+                          <span className="text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                            把握：{CONFIDENCE_LABELS[a.confidence] ?? a.confidence}
+                          </span>
+                        )}
+                        {a.error_type && (
+                          <span className="text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+                            錯因：{ERROR_LABELS[a.error_type] ?? a.error_type}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {(() => {
+                      if (!a.ai_feedback) return null;
+                      let fb: AiFeedback;
+                      try { fb = JSON.parse(a.ai_feedback); } catch { return null; }
+                      return (
+                        <div className="border border-violet-200 bg-violet-50/50 rounded-lg p-3 space-y-2 text-xs">
+                          <p className="font-semibold text-violet-700">AI 批改 — {fb.score}/10</p>
+                          {fb.got_points.length > 0 && (
+                            <p><span className="text-green-700 font-medium">✓ 有答到：</span><span className="text-gray-600">{fb.got_points.join("；")}</span></p>
+                          )}
+                          {fb.missing_points.length > 0 && (
+                            <p><span className="text-yellow-700 font-medium">△ 漏掉：</span><span className="text-gray-600">{fb.missing_points.join("；")}</span></p>
+                          )}
+                          {fb.wrong_points.length > 0 && (
+                            <p><span className="text-red-700 font-medium">✗ 寫錯：</span><span className="text-gray-600">{fb.wrong_points.join("；")}</span></p>
+                          )}
+                          <p className="text-gray-600 border-t border-violet-100 pt-1.5">{fb.feedback}</p>
+                        </div>
+                      );
+                    })()}
                     <Link
                       href={`/questions/${a.question_id}`}
                       className="text-xs text-blue-600 hover:underline inline-block"

@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
       SELECT
         a.id, a.answer_text, a.selected_option, a.is_correct,
         a.self_assessment, a.time_spent_seconds, a.created_at,
+        a.confidence, a.error_type, a.ai_score, a.ai_feedback,
         q.id AS question_id, q.question_text, q.question_type,
         q.topic, q.subtopic, q.correct_option, q.difficulty
       FROM user_attempts a

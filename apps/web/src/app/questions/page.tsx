@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { Question } from "@/lib/types";
 
 const SCHOOLS = ["NCKU", "NCCU", "template"];
@@ -33,10 +34,20 @@ const TOPIC_LABELS: Record<string, string> = {
 interface PageData { items: Question[]; total: number; page: number; limit: number }
 
 export default function QuestionsPage() {
+  return (
+    <Suspense fallback={<div className="py-16 text-center text-gray-400">載入中…</div>}>
+      <QuestionsPageInner />
+    </Suspense>
+  );
+}
+
+function QuestionsPageInner() {
+  const searchParams = useSearchParams();
   const [data, setData]         = useState<PageData | null>(null);
   const [loading, setLoading]   = useState(false);
   const [school, setSchool]     = useState("");
-  const [topic, setTopic]       = useState("");
+  const [topic, setTopic]       = useState(searchParams.get("topic") ?? "");
+  const [concept, setConcept]   = useState(searchParams.get("concept") ?? "");
   const [minScore, setMinScore] = useState(0);
   const [page, setPage]         = useState(1);
   const limit = 20;
@@ -46,11 +57,12 @@ export default function QuestionsPage() {
     const p = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (school)   p.set("school", school);
     if (topic)    p.set("topic", topic);
+    if (concept)  p.set("concept", concept);
     if (minScore) p.set("min_value_score", String(minScore));
     const res = await fetch(`/api/questions?${p}`);
     setData(await res.json());
     setLoading(false);
-  }, [school, topic, minScore, page]);
+  }, [school, topic, concept, minScore, page]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -90,6 +102,19 @@ export default function QuestionsPage() {
         >
           {GRADES.map(g => <option key={g.label} value={g.min}>{g.label}</option>)}
         </select>
+
+        {concept && (
+          <span className="flex items-center gap-1.5 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5">
+            #{concept}
+            <button
+              onClick={() => { setConcept(""); setPage(1); }}
+              className="text-blue-400 hover:text-blue-700"
+              aria-label="清除知識點篩選"
+            >
+              ✕
+            </button>
+          </span>
+        )}
       </div>
 
       {/* Question list */}
