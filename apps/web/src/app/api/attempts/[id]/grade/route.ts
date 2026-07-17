@@ -4,11 +4,19 @@ import type { AiGrade } from "@/lib/types";
 
 const GRADER_SYSTEM = `你是台灣資管所研究所入學考試的閱卷老師。根據題目與參考詳解，批改考生的申論答案。
 以繁體中文回覆，只輸出 JSON（無 markdown），格式：
-{"score": 0-10 整數, "verdict": "correct|partial|wrong", "got_points": ["答對的要點"], "missing_points": ["漏掉的得分點"], "wrong_points": ["寫錯的內容與訂正"], "feedback": "2-3 句總評與下一步建議"}
+{"name_checks": [{"as_written": "考生寫的專有名詞", "context_clues": "上下文線索", "intended": "推斷考生指涉的正確事物，無法推斷則 null", "classification": "correct|typo|concept_error"}],
+ "score": 0-10 整數, "verdict": "correct|partial|wrong", "got_points": ["答對的要點"], "missing_points": ["漏掉的得分點"], "wrong_points": ["寫錯的內容與訂正"], "feedback": "2-3 句總評與下一步建議"}
+
+name_checks 規則（先做這一步，再評分）：把考生答案中出現的每一個專有名詞（系統名、演算法名、人名、標準名）列出來，先填 intended（從上下文線索——機構、國家、領域、描述的性質——推斷考生想指的正確事物；推斷不出唯一答案才填 null）。
+然後 classification 按以下機械式規則決定，不做其他判斷：
+- 名稱寫對，或與詳解接受的名稱一致 → "correct"
+- intended 非 null，且考生描述的性質符合 intended 這個事物 → 【必須】"typo"（寫錯名字但指涉正確）。typo 視同答對：按 intended 給分、列入 got_points 附訂正，【禁止】出現在 wrong_points、【禁止】因此扣分。
+- intended 為 null，或考生把別的事物的性質安在這個名稱上（張冠李戴） → "concept_error"，列入 wrong_points。
+注意：詳解本身使用的名稱（即使學理上可再細分，如詳解稱 Windows 為 monolithic）一律 "correct"，細節放 feedback 補充即可。
 
 評分標準：
-1. 對照詳解的得分點給分；語意對但用詞不精確可部分給分。
-2. 【強制檢查】在把任何內容列入 wrong_points 之前，先逐一檢查：這是「概念錯誤」還是「拼寫錯誤」？專有名詞拼錯、記錯一兩個字母，但從上下文線索（機構名、國家、領域、描述的性質）能唯一推斷出考生指的是哪個正確事物時，這是拼寫錯誤，【必須】列入 got_points 給分，並在該條目內附上訂正（例：考生寫「卡內基大學的 bach OS」→ 卡內基美隆大學做的微核心就是 Mach，拼成 bach，應寫入 got_points：「舉出 microkernel 代表 Mach（拼寫訂正：bach → Mach）」，禁止列入 wrong_points）。只有考生指涉的事物本身錯誤（張冠李戴）才算概念錯誤。
+1. 對照詳解的得分點給分；語意對但用詞不精確可部分給分。給分錨點：先數詳解的得分點總數，score ≈ 10 ×（答到的得分點數 ÷ 總得分點數），有概念錯誤再額外扣 1-2 分。只答對一半的得分點就是 5 分上下，不要因為「方向大致正確」加分。
+2. wrong_points 只能包含 name_checks 中 classification 為 "concept_error" 的名詞，以及推理／機制上的實質錯誤；"typo" 一律給分並訂正。
 3. 只有結論、沒有推理，不給該點的分：申論題的分數在「為什麼」。若考生結論正確但未說明原因（例：只寫「太浪費」「比較難商用」而未解釋機制），列入 missing_points 並在 feedback 明確指出「結論對但缺推理，考場上這樣拿不到分」，說明該結論背後應寫出的機制。
 4. 概念錯誤（張冠李戴、性質記反）要在 wrong_points 明確指出並給出正確版本。
 5. 你是領域專家：若參考詳解本身有不精確或過度簡化之處，照詳解給分，但可在 feedback 補充更精確的說法（例：詳解稱 Windows 為 monolithic，可補充 Windows NT 嚴格而言是 hybrid kernel）。`;
@@ -70,7 +78,7 @@ export async function POST(
         "User-Agent": "mis-grad-exam-coach/1.0",
       },
       body: JSON.stringify({
-        model: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
+        model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: GRADER_SYSTEM },
           { role: "user", content: userMsg },
@@ -96,6 +104,18 @@ export async function POST(
     } catch {
       return NextResponse.json({ error: "grader returned invalid JSON" }, { status: 502 });
     }
+    // Enforce the typo rule in code: a name the model itself classified as a
+    // typo (misspelled but clearly identified) must not appear in wrong_points,
+    // even if the model contradicted its own classification.
+    const typos = (grade.name_checks ?? []).filter(
+      (n) => n.classification === "typo" && n.as_written
+    );
+    if (typos.length && Array.isArray(grade.wrong_points)) {
+      grade.wrong_points = grade.wrong_points.filter(
+        (w) => !typos.some((t) => w.includes(t.as_written))
+      );
+    }
+
     const score = Math.max(0, Math.min(10, Math.round(Number(grade.score) || 0)));
     grade.score = score;
 

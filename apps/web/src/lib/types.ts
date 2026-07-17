@@ -2,7 +2,15 @@ export type QuestionStatus = "new" | "learning" | "wrong" | "reviewing" | "maste
 export type Confidence = "low" | "medium" | "high";
 export type ErrorType = "concept" | "memory" | "careless" | "unseen";
 
+export interface NameCheck {
+  as_written: string;
+  context_clues?: string;
+  intended: string | null;
+  classification: "correct" | "typo" | "concept_error";
+}
+
 export interface AiGrade {
+  name_checks?: NameCheck[];
   score: number; // 0-10
   verdict: "correct" | "partial" | "wrong";
   got_points: string[];
