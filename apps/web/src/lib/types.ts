@@ -9,11 +9,18 @@ export interface NameCheck {
   classification: "correct" | "typo" | "concept_error";
 }
 
+/** New grades attach verbatim evidence; older stored grades are plain strings. */
+export type GotPoint = string | { point: string; quote?: string };
+
+export function gotPointText(p: GotPoint): string {
+  return typeof p === "string" ? p : p.point;
+}
+
 export interface AiGrade {
   name_checks?: NameCheck[];
   score: number; // 0-10
   verdict: "correct" | "partial" | "wrong";
-  got_points: string[];
+  got_points: GotPoint[];
   missing_points: string[];
   wrong_points: string[];
   feedback: string;

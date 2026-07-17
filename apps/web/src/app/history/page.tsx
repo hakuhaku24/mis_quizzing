@@ -7,10 +7,13 @@ const TOPIC_LABELS: Record<string, string> = {
   MIS: "管理資訊系統", DS: "資料結構", CS: "計算機概論", STAT: "統計學",
 };
 
+type GotPoint = string | { point: string; quote?: string };
+const gotText = (p: GotPoint) => (typeof p === "string" ? p : p.point);
+
 interface AiFeedback {
   score: number;
   verdict: string;
-  got_points: string[];
+  got_points: GotPoint[];
   missing_points: string[];
   wrong_points: string[];
   feedback: string;
@@ -250,7 +253,7 @@ export default function HistoryPage() {
                             </button>
                           </div>
                           {fb.got_points.length > 0 && (
-                            <p><span className="text-green-700 font-medium">✓ 有答到：</span><span className="text-gray-600">{fb.got_points.join("；")}</span></p>
+                            <p><span className="text-green-700 font-medium">✓ 有答到：</span><span className="text-gray-600">{fb.got_points.map(gotText).join("；")}</span></p>
                           )}
                           {fb.missing_points.length > 0 && (
                             <p><span className="text-yellow-700 font-medium">△ 漏掉：</span><span className="text-gray-600">{fb.missing_points.join("；")}</span></p>

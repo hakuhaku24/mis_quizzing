@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { use } from "react";
+import { gotPointText } from "@/lib/types";
 import type { AiGrade, Confidence, ErrorType, Question, Solution } from "@/lib/types";
 
 interface QuestionDetail extends Question {
@@ -333,7 +334,7 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
                       <div className="text-sm space-y-1">
                         <p className="font-medium text-green-700">✓ 有答到</p>
                         <ul className="list-disc pl-5 text-gray-600 space-y-0.5">
-                          {aiGrade.got_points.map((p, i) => <li key={i}>{p}</li>)}
+                          {aiGrade.got_points.map((p, i) => <li key={i}>{gotPointText(p)}</li>)}
                         </ul>
                       </div>
                     )}
