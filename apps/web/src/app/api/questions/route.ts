@@ -19,6 +19,12 @@ export async function GET(req: NextRequest) {
   const topic = searchParams.get("topic");
   if (topic) { conditions.push("topic LIKE ?"); params.push(`%${topic}%`); }
 
+  const concept = searchParams.get("concept");
+  if (concept) {
+    conditions.push("EXISTS (SELECT 1 FROM json_each(questions.concepts) WHERE json_each.value = ?)");
+    params.push(concept);
+  }
+
   const year = searchParams.get("year");
   if (year) { conditions.push("year_label = ?"); params.push(`${year}學年度`); }
 

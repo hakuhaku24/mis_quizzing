@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { use } from "react";
-import type { Question, Solution } from "@/lib/types";
+import type { Confidence, ErrorType, Question, Solution } from "@/lib/types";
 
 interface QuestionDetail extends Question {
   solutions?: Solution[];
@@ -23,6 +23,19 @@ const VERIFIED_LABELS: Record<string, { label: string; cls: string }> = {
 
 type SelfAssessment = "correct" | "partial" | "wrong";
 
+const CONFIDENCE_META: Record<Confidence, { label: string; sel: string; idle: string }> = {
+  low:    { label: "沒把握",   sel: "bg-gray-600 text-white border-gray-600",   idle: "border-gray-300 text-gray-600 hover:bg-gray-50" },
+  medium: { label: "普通",     sel: "bg-blue-500 text-white border-blue-500",   idle: "border-blue-300 text-blue-600 hover:bg-blue-50" },
+  high:   { label: "很有把握", sel: "bg-blue-700 text-white border-blue-700",   idle: "border-blue-400 text-blue-700 hover:bg-blue-50" },
+};
+
+const ERROR_TYPE_META: Record<ErrorType, { label: string; hint: string }> = {
+  concept:  { label: "觀念不懂", hint: "概念本身沒搞懂" },
+  memory:   { label: "記憶模糊", hint: "學過但想不起來" },
+  careless: { label: "粗心",     hint: "會但看錯／算錯" },
+  unseen:   { label: "沒看過",   hint: "完全沒學過這個" },
+};
+
 export default function QuestionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [question, setQuestion]         = useState<QuestionDetail | null>(null);
@@ -35,6 +48,8 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
   const [isCorrect, setIsCorrect]       = useState<boolean | null>(null);
   const [attemptId, setAttemptId]       = useState<number | null>(null);
   const [selfAssessment, setSelfAssessment] = useState<SelfAssessment | null>(null);
+  const [confidence, setConfidence]         = useState<Confidence | null>(null);
+  const [errorType, setErrorType]           = useState<ErrorType | null>(null);
   const startTime = useState(() => Date.now())[0];
 
   useEffect(() => {
@@ -49,7 +64,8 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
     try { return JSON.parse(question.options as string); } catch { return []; }
   })();
 
-  const canSubmit = isMC ? !!selectedOption : !!answer.trim();
+  const answered = isMC ? !!selectedOption : !!answer.trim();
+  const canSubmit = answered && !!confidence;
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
@@ -68,6 +84,7 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
         selected_option: isMC ? selectedOption : undefined,
         is_correct: correct !== null ? (correct ? 1 : 0) : undefined,
         time_spent_seconds: timeSpent,
+        confidence,
       }),
     });
     const data = await res.json();
@@ -87,6 +104,22 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
       });
     }
   };
+
+  const handleErrorType = async (type: ErrorType) => {
+    setErrorType(type);
+    if (attemptId) {
+      await fetch(`/api/attempts/${attemptId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ error_type: type }),
+      });
+    }
+  };
+
+  // Wrong MC answer, or essay self-assessed as partial/wrong → ask why it went wrong
+  const needsErrorType =
+    submitted &&
+    (isMC ? isCorrect === false : selfAssessment === "wrong" || selfAssessment === "partial");
 
   if (loading) return <div className="py-24 text-center text-gray-400">載入中…</div>;
   if (!question) return <div className="py-24 text-center text-gray-400">找不到題目</div>;
@@ -115,11 +148,16 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
           {question.year_label && !question.year_label.startsWith("範本") && (
             <span className="text-xs text-gray-400">{question.year_label}</span>
           )}
-          {question.subtopic && (
-            <span className="text-xs bg-gray-50 text-gray-500 px-2 py-0.5 rounded-full border">
-              #{question.subtopic}
-            </span>
-          )}
+          {(() => {
+            let tags: string[] = [];
+            try { tags = question.concepts ? JSON.parse(question.concepts) : []; } catch { /* ignore */ }
+            if (!tags.length && question.subtopic) tags = [question.subtopic];
+            return tags.map((t) => (
+              <span key={t} className="text-xs bg-gray-50 text-gray-500 px-2 py-0.5 rounded-full border">
+                #{t}
+              </span>
+            ));
+          })()}
           <div className="ml-auto flex items-center gap-2">
             {question.difficulty && (
               <span className="text-xs text-gray-400">難度 {question.difficulty}/5</span>
@@ -191,20 +229,43 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
         )}
 
         {!submitted ? (
-          <div className="flex gap-3">
-            <button
-              onClick={handleSubmit}
-              disabled={!canSubmit || submitting}
-              className="px-5 py-2 bg-blue-600 text-white text-sm rounded-lg disabled:opacity-40 hover:bg-blue-700 transition-colors"
-            >
-              {submitting ? "送出中…" : "送出並看詳解"}
-            </button>
-            <button
-              onClick={() => setShowSolution(true)}
-              className="px-5 py-2 border border-gray-200 text-sm rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              直接看詳解
-            </button>
+          <div className="space-y-3">
+            {answered && (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-500">送出前先誠實評估：這題你多有把握？</p>
+                <div className="flex gap-2 flex-wrap">
+                  {(Object.keys(CONFIDENCE_META) as Confidence[]).map((v) => {
+                    const meta = CONFIDENCE_META[v];
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => setConfidence(v)}
+                        className={`px-4 py-1.5 text-sm border rounded-lg transition-colors ${
+                          confidence === v ? meta.sel : meta.idle
+                        }`}
+                      >
+                        {meta.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit || submitting}
+                className="px-5 py-2 bg-blue-600 text-white text-sm rounded-lg disabled:opacity-40 hover:bg-blue-700 transition-colors"
+              >
+                {submitting ? "送出中…" : answered && !confidence ? "先選把握程度 ↑" : "送出並看詳解"}
+              </button>
+              <button
+                onClick={() => setShowSolution(true)}
+                className="px-5 py-2 border border-gray-200 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                直接看詳解
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -244,6 +305,38 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
                 </div>
                 {selfAssessment && (
                   <p className="text-xs text-gray-400">已記錄自評</p>
+                )}
+              </div>
+            )}
+
+            {/* Error-type diagnosis for wrong / partially-wrong answers */}
+            {needsErrorType && (
+              <div className="space-y-2 border-t border-gray-100 pt-3">
+                <p className="text-sm text-gray-500">為什麼沒答好？（幫助之後對症下藥）</p>
+                <div className="flex gap-2 flex-wrap">
+                  {(Object.keys(ERROR_TYPE_META) as ErrorType[]).map((v) => {
+                    const meta = ERROR_TYPE_META[v];
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => handleErrorType(v)}
+                        disabled={errorType !== null}
+                        title={meta.hint}
+                        className={`px-4 py-1.5 text-sm border rounded-lg transition-colors disabled:cursor-default ${
+                          errorType === v
+                            ? "bg-orange-500 text-white border-orange-500"
+                            : errorType !== null
+                            ? "border-gray-200 text-gray-300"
+                            : "border-orange-300 text-orange-700 hover:bg-orange-50"
+                        }`}
+                      >
+                        {meta.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {errorType && (
+                  <p className="text-xs text-gray-400">已記錄錯因：{ERROR_TYPE_META[errorType].label}</p>
                 )}
               </div>
             )}

@@ -6,13 +6,27 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { self_assessment } = await req.json();
+  const { self_assessment, error_type } = await req.json();
 
-  if (!["correct", "partial", "wrong"].includes(self_assessment)) {
+  if (self_assessment != null && !["correct", "partial", "wrong"].includes(self_assessment)) {
     return NextResponse.json({ error: "invalid self_assessment" }, { status: 400 });
+  }
+  if (error_type != null && !["concept", "memory", "careless", "unseen"].includes(error_type)) {
+    return NextResponse.json({ error: "invalid error_type" }, { status: 400 });
+  }
+  if (self_assessment == null && error_type == null) {
+    return NextResponse.json({ error: "nothing to update" }, { status: 400 });
   }
 
   const db = getWriteDb();
+
+  if (error_type != null) {
+    db.prepare("UPDATE user_attempts SET error_type = ? WHERE id = ?").run(error_type, id);
+  }
+  if (self_assessment == null) {
+    db.close();
+    return NextResponse.json({ ok: true });
+  }
 
   db.prepare("UPDATE user_attempts SET self_assessment = ? WHERE id = ?").run(self_assessment, id);
 

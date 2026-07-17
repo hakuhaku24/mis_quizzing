@@ -1,64 +1,48 @@
-# Progress Report — Milestone 2
+# Progress Report — Phase 1：作答資料採集
 
-日期：2026-05-23
+日期：2026-07-17（前次：2026-05-23 Milestone 2）
 
-## 已完成所有項目
+## 目標
 
-### ✅ Repo Skeleton + Source Survey + Supabase Schema
-（見 Milestone 1）
+回答「我的程度到底在哪」需要高品質的作答資料。Phase 1 把每次作答從「對/錯」升級為完整的資料點，為後續的掌握度模型、弱點分析、預測分數鋪路。
 
-### ✅ Python Pipeline 依賴安裝
-- Python 3.13 + pymupdf 1.27.2 + pdfplumber + beautifulsoup4 等全部安裝完成
-- requirements.txt 改為版本下限格式（無需 Visual Studio 編譯）
+## 本次完成
 
-### ✅ PDF 下載（36 個 PDF）
-- NCKU：20 個（111–115 學年 × 4 科目：考試科目/MIS/DS/CS）全部成功
-- NCCU：16 個（100–115 學年整合 PDF）全部成功
-- 存放：`data/downloads/ncku/` + `data/downloads/nccu/`
-- SSL 修正：大學伺服器使用非標準憑證（Missing SKID），已在 base.py 設 verify=False
+### ✅ 題庫清理（213 → 201 題）
+- **刪除 12 筆垃圾資料**（原 id 143–154）：政大機構典藏 PDF 的著作權聲明被誤抽成「真實考題」——前次報告的「12 道真實考題」實為版權頁，已刪除
+- 修正 2 題科目誤標（攤銷複雜度、MST 演算法：MIS → DS）
+- 目前題庫：**201 題**（MIS 72 / DS 68 / CS 61；申論 117 / 選擇 59 / 簡答 25）
 
-### ✅ PDF 文字抽取 + 拆題
-- NCKU PDFs：全部為掃描圖像（0 chars），需 OCR（Tesseract + chi_tra）— 標記 manual_import_required
-- NCCU 100–105：文字型 PDF，成功抽取 12 道真實考題
-- 說明：台灣大學考古題幾乎全為掃描 PDF，OCR 需另行安裝 Tesseract
+### ✅ 細顆粒知識點標籤（44 個概念）
+- `questions.concepts`：JSON 陣列，每題 1–3 個標籤，逐題人工審閱
+- 跨科目標籤（如 B樹×資料庫、雜湊×分散式系統、TLS×資訊安全）
+- `GET /api/questions?concept=圖` 可依知識點篩選
+- 腳本：`pipeline/jobs/tag_concepts.py`（冪等，可重跑）
 
-### ✅ 題庫建立（154 題）
-- **142 道高品質範本題**（MIS 54 / DS 46 / CS 42）
-  - 涵蓋研究所常考核心主題，每題附完整解題要點
-  - 檔案：`pipeline/jobs/generate_template_questions.py`
-- **12 道真實考題**（NCCU 100–105 學年）
-- SQLite DB：`data/questions.db`
-- 架構：`pipeline/db/sqlite_loader.py`（questions + solutions + user_attempts + states）
+### ✅ 作答遙測（answering telemetry）
+每次作答現在記錄：
+| 欄位 | 時機 | 值 |
+|---|---|---|
+| `confidence` | 送出前必選 | 沒把握 / 普通 / 很有把握 |
+| `time_spent_seconds` | 自動計時 | 秒數 |
+| `is_correct` / `self_assessment` | 送出後 | 選擇題自動判分；申論自評 |
+| `error_type` | 答錯後 | 觀念不懂 / 記憶模糊 / 粗心 / 沒看過 |
 
-### ✅ Next.js 完整串接 SQLite（本地零依賴可跑）
-- 移除 Supabase 依賴，改用 better-sqlite3
-- API Routes 更新（全部通過 TypeScript + build）：
-  - `GET /api/questions`（分頁 + 篩選）
-  - `GET /api/questions/[id]`（含詳解）
-  - `POST /api/questions/[id]/attempts`（記錄答題）
-  - `GET /api/stats`（題庫統計）
-- 前端頁面更新：題庫列表、單題作答+詳解
-- Build 通過：8 routes，TypeScript 無錯誤
+- 信心度 × 對錯 → 之後可畫**校準曲線**（抓出「以為會但其實不會」的盲區）
+- 錯因分類 → 不同錯因對症下藥（觀念題重讀、記憶題進 SRS、粗心題練速度）
+- Migration：`pipeline/db/migrate_phase1.py`（冪等）
 
-## 現在就可以跑
+### ✅ UI 更新（questions/[id]）
+- 作答後、送出前：把握程度三選一（必選才能送出）
+- 答錯（選擇題）或自評「部分懂/答錯」（申論）後：錯因四選一
+- 題目標頭顯示多知識點標籤
 
-```bash
-cd mis-grad-exam-coach/apps/web
-npm run dev
-# 開啟 http://localhost:3000
-```
+## 驗證
+- `npm run build` 通過（TypeScript 無錯誤）
+- E2E 實測：concept 篩選 → 作答（confidence）→ PATCH 錯因/自評 → DB 落庫正確
 
-**無需 Supabase、無需 API Key**，154 題（MIS/DS/CS）全部可作答、看詳解。
-
-## 下一步建議
-
-1. **OCR 支援** — 安裝 Tesseract + `chi_tra` 語言包，可從 NCKU/NCCU 掃描 PDF 抽取更多真實考題
-   ```bash
-   winget install UB-Mannheim.TesseractOCR
-   # 選安裝 Traditional Chinese 語言包
-   python -m pipeline.jobs.process_all_pdfs  # 重新處理
-   ```
-2. **AI 生題** — 設定 ANTHROPIC_API_KEY 後執行 `pipeline/jobs/generate_ai_questions.py`（待開發）
-3. **Admin 審題頁面** — 人工標記真題、修正分類
-4. **進度追蹤** — 記錄每道題的學習狀態（SRS 複習排程）
-5. **Supabase 部署** — 若需線上版，執行 `supabase db push` 後更新 API routes
+## 下一步（Phase 2+）
+1. **AI 批改申論**（單點價值最高；需 ANTHROPIC_API_KEY）
+2. **掌握度模型**：每知識點 Elo 式分數 + 時間衰減 → 弱點雷達圖 + 預測分數
+3. **每日任務**：60% 弱點 + 20% SRS 到期複習 + 20% 新題
+4. **模考模式**：計時模考 + 成績趨勢線（考期：2027-01）

@@ -1,4 +1,6 @@
 export type QuestionStatus = "new" | "learning" | "wrong" | "reviewing" | "mastered" | "skipped";
+export type Confidence = "low" | "medium" | "high";
+export type ErrorType = "concept" | "memory" | "careless" | "unseen";
 export type SolutionSourceType = "ai_draft" | "human_written" | "human_verified" | "teacher_verified" | "template";
 export type VerifiedStatus = "unverified" | "ai_draft" | "template" | "human_reviewed" | "human_verified" | "teacher_verified";
 
@@ -20,6 +22,7 @@ export interface Question {
   verified_status: VerifiedStatus | null;
   options: string | null;        // JSON array string for MC questions
   correct_option: string | null; // 'A'|'B'|'C'|'D' for MC questions
+  concepts: string | null;       // JSON array string of fine-grained concept tags
   created_at: string;
 }
 

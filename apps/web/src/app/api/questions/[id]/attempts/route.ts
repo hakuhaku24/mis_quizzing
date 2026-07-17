@@ -7,17 +7,21 @@ export async function POST(
 ) {
   const { id } = await params;
   const body = await req.json();
-  const { answer_text, selected_option, is_correct, time_spent_seconds } = body;
+  const { answer_text, selected_option, is_correct, time_spent_seconds, confidence } = body;
+
+  if (confidence != null && !["low", "medium", "high"].includes(confidence)) {
+    return NextResponse.json({ error: "invalid confidence" }, { status: 400 });
+  }
 
   const db = getWriteDb();
 
   const result = db
     .prepare(
       `INSERT INTO user_attempts
-         (question_id, answer_text, selected_option, is_correct, time_spent_seconds)
-       VALUES (?, ?, ?, ?, ?)`
+         (question_id, answer_text, selected_option, is_correct, time_spent_seconds, confidence)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
-    .run(id, answer_text ?? null, selected_option ?? null, is_correct ?? null, time_spent_seconds ?? null);
+    .run(id, answer_text ?? null, selected_option ?? null, is_correct ?? null, time_spent_seconds ?? null, confidence ?? null);
 
   const attemptId = result.lastInsertRowid;
 
