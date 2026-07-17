@@ -1,49 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getDb } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
-  const supabase = await createClient();
 
-  const page = parseInt(searchParams.get("page") ?? "1");
-  const limit = Math.min(parseInt(searchParams.get("limit") ?? "20"), 50);
-  const from = (page - 1) * limit;
+  const page  = Math.max(1, parseInt(searchParams.get("page")  ?? "1"));
+  const limit = Math.min(50, parseInt(searchParams.get("limit") ?? "20"));
+  const offset = (page - 1) * limit;
 
-  let query = supabase
-    .from("questions")
-    .select(`
-      id, year_label, question_number, question_text, question_type,
-      topic, subtopic, difficulty, value_score, verified_status,
-      school:schools(id, code, name_zh),
-      subject:subjects(id, code, name_zh)
-    `, { count: "exact" });
+  const db = getDb();
+
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
 
   const school = searchParams.get("school");
-  if (school) {
-    const { data: s } = await supabase.from("schools").select("id").eq("code", school).single();
-    if (s) query = query.eq("school_id", s.id);
-  }
-
-  const subject = searchParams.get("subject");
-  if (subject) {
-    const { data: sub } = await supabase.from("subjects").select("id").eq("code", subject).single();
-    if (sub) query = query.eq("subject_id", sub.id);
-  }
+  if (school) { conditions.push("school = ?"); params.push(school); }
 
   const topic = searchParams.get("topic");
-  if (topic) query = query.ilike("topic", `%${topic}%`);
+  if (topic) { conditions.push("topic LIKE ?"); params.push(`%${topic}%`); }
 
   const year = searchParams.get("year");
-  if (year) query = query.eq("year_label", `${year}學年度`);
+  if (year) { conditions.push("year_label = ?"); params.push(`${year}學年度`); }
 
   const minScore = searchParams.get("min_value_score");
-  if (minScore) query = query.gte("value_score", parseFloat(minScore));
+  if (minScore) { conditions.push("value_score >= ?"); params.push(parseFloat(minScore)); }
 
-  const { data, error, count } = await query
-    .order("value_score", { ascending: false })
-    .range(from, from + limit - 1);
+  const sourceType = searchParams.get("source_type");
+  if (sourceType) { conditions.push("source_type = ?"); params.push(sourceType); }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  return NextResponse.json({ items: data, page, limit, total: count ?? 0 });
+  const total: number = (
+    db.prepare(`SELECT COUNT(*) as cnt FROM questions ${where}`).get(...params) as { cnt: number }
+  ).cnt;
+
+  const items = db
+    .prepare(`SELECT * FROM questions ${where} ORDER BY value_score DESC LIMIT ? OFFSET ?`)
+    .all(...params, limit, offset);
+
+  return NextResponse.json({ items, page, limit, total });
 }

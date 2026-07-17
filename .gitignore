@@ -12,5 +12,7 @@ dist/
 .DS_Store
 data/downloads/
 data/*.pdf
+data/*.db-shm
+data/*.db-wal
 *.log
 .supabase/

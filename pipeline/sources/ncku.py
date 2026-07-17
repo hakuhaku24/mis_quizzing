@@ -2,9 +2,12 @@
 NCKU 成功大學資訊管理研究所考古題 connector
 
 列表頁：https://exam.lib.ncku.edu.tw/master_subject.php?department_code=BC08
-PDF URL 規律：https://exam.lib.ncku.edu.tw/exam/BC08_{year}_{index}.pdf
-
-科目 index 因年度而異，需先解析列表頁取得 mapping。
+HTML 結構（UTF-8）：
+  <div class='table'>
+    <div class='row header'><div class='cell'>115學年度</div>...</div>
+    <div class='row'><div class='cell'>科目名稱</div><div class='cell'><a href='...BC08_115_1.pdf'></div>
+    ...
+  </div>
 """
 
 import json
@@ -21,78 +24,67 @@ from pipeline.config import DOWNLOADS_DIR, REQUEST_DELAY_SECONDS
 from pipeline.sources.base import ExamAsset, _session, download_pdf
 
 LIST_URL = "https://exam.lib.ncku.edu.tw/master_subject.php?department_code=BC08"
-PDF_BASE = "https://exam.lib.ncku.edu.tw/exam"
-DEPT_CODE = "BC08"
 SCHOOL = "NCKU"
 DEPARTMENT = "資訊管理研究所"
+RECENT_YEARS = 5  # 只抓近 5 年
 
 
-def _parse_subject_index(img_src: str) -> Optional[int]:
-    """Extract subject index from icon image src like 'icon_0.gif' → 0."""
-    m = re.search(r"icon_(\d+)", img_src)
-    return int(m.group(1)) if m else None
-
-
-def discover_assets(session: Optional[requests.Session] = None) -> list[ExamAsset]:
-    """Parse the NCKU listing page and return all discoverable exam assets."""
+def discover_assets(session: Optional[requests.Session] = None,
+                    years: int = RECENT_YEARS) -> list[ExamAsset]:
     s = session or _session()
     resp = s.get(LIST_URL, timeout=20)
+    resp.encoding = "utf-8"
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "lxml")
 
     assets: list[ExamAsset] = []
+    seen_years: set[int] = set()
 
-    # The page groups by 學年度. Each group has an H3 heading like "115學年度"
-    # followed by subject links/icons.
-    current_year_label = ""
-    current_year = 0
-
-    for tag in soup.find_all(["h3", "a"]):
-        if tag.name == "h3":
-            text = tag.get_text(strip=True)
-            m = re.search(r"(\d+)\s*學年度", text)
-            if m:
-                current_year_label = f"{m.group(1)}學年度"
-                current_year = int(m.group(1))
+    for table in soup.find_all("div", class_="table"):
+        # Year from header row
+        header = table.find("div", class_="row")
+        year_text = header.find("div", class_="cell").get_text(strip=True) if header else ""
+        m = re.search(r"(\d+)\s*學年度", year_text)
+        if not m:
             continue
+        exam_year = int(m.group(1))
 
-        if tag.name == "a" and current_year_label:
-            href = tag.get("href", "")
-            # href looks like: exam/BC08_115_0.pdf
-            pdf_match = re.search(r"BC08_(\d+)_(\d+)\.pdf", href)
-            if not pdf_match:
+        seen_years.add(exam_year)
+        if len(seen_years) > years:
+            break  # stop after collecting `years` distinct years
+
+        # Data rows (skip header row)
+        for row in table.find_all("div", class_="row"):
+            if "header" in row.get("class", []):
                 continue
-
-            year_from_href = int(pdf_match.group(1))
-            idx = int(pdf_match.group(2))
-
-            # Subject name is the link text or alt text
-            subject_name = tag.get_text(strip=True)
-            if not subject_name:
-                img = tag.find("img")
-                subject_name = img.get("alt", f"科目{idx}") if img else f"科目{idx}"
-
-            asset_url = f"{PDF_BASE}/BC08_{year_from_href}_{idx}.pdf"
-            storage_name = f"ncku_{year_from_href}_{idx}.pdf"
+            cells = row.find_all("div", class_="cell")
+            if len(cells) < 2:
+                continue
+            subject_name = cells[0].get_text(strip=True)
+            link = cells[1].find("a", href=True)
+            if not link:
+                continue
+            pdf_url = link["href"]
+            if not pdf_url.endswith(".pdf"):
+                continue
 
             assets.append(ExamAsset(
                 school=SCHOOL,
                 department=DEPARTMENT,
-                year_label=f"{year_from_href}學年度",
-                exam_year=year_from_href,
+                year_label=f"{exam_year}學年度",
+                exam_year=exam_year,
                 subject=subject_name,
                 source_url=LIST_URL,
-                asset_url=asset_url,
+                asset_url=pdf_url,
                 fetch_strategy="direct_html_parse",
-                notes=f"subject_index={idx}",
+                notes=f"year={exam_year}",
             ))
-            time.sleep(0)  # no delay for discovery
 
     return assets
 
 
-def download_all(assets: list[ExamAsset], session: Optional[requests.Session] = None) -> list[ExamAsset]:
-    """Download PDFs for all assets and update storage_path / sha256_hash."""
+def download_all(assets: list[ExamAsset],
+                 session: Optional[requests.Session] = None) -> list[ExamAsset]:
     s = session or _session()
     school_dir = DOWNLOADS_DIR / "ncku"
     school_dir.mkdir(parents=True, exist_ok=True)
@@ -118,26 +110,23 @@ def download_all(assets: list[ExamAsset], session: Optional[requests.Session] = 
             print(f"  403 - manual import required: {filename}")
         except Exception as e:
             asset.extraction_status = "download_failed"
-            asset.notes += f" | download_error: {e}"
+            asset.notes += f" | error: {e}"
             print(f"  FAILED: {filename} — {e}")
 
     return assets
 
 
 def run_survey() -> list[dict]:
-    """Discover assets without downloading. Returns list of dicts for JSON output."""
     assets = discover_assets()
     return [a.__dict__ for a in assets]
 
 
 if __name__ == "__main__":
-    print("Discovering NCKU assets...")
     assets = discover_assets()
-    print(f"Found {len(assets)} assets")
-    for a in assets[:5]:
+    print(f"Found {len(assets)} NCKU assets")
+    for a in assets:
         print(f"  {a.year_label} {a.subject}: {a.asset_url}")
-
     manifest_path = Path(__file__).parent.parent.parent / "data" / "ncku_asset_manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump([a.__dict__ for a in assets], f, ensure_ascii=False, indent=2)
-    print(f"\nManifest written to {manifest_path}")
+    print(f"\nManifest → {manifest_path}")

@@ -22,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="flex items-center gap-6 text-sm">
               <Link href="/questions" className="hover:text-blue-600 transition-colors">題庫</Link>
               <Link href="/analytics" className="hover:text-blue-600 transition-colors">弱點分析</Link>
+              <Link href="/history" className="hover:text-blue-600 transition-colors">答題記錄</Link>
             </nav>
           </div>
         </header>

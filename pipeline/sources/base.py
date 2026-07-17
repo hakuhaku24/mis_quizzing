@@ -1,12 +1,19 @@
 import hashlib
 import time
+import warnings
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
 import requests
+import urllib3
 
 from pipeline.config import DOWNLOADS_DIR, MAX_RETRIES, REQUEST_DELAY_SECONDS, USER_AGENT
+
+# Some university servers have non-standard SSL certificates (missing SKID).
+# We suppress the warning and proceed; this is an internal research tool on
+# publicly accessible exam files.
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 @dataclass
@@ -32,6 +39,7 @@ class ExamAsset:
 def _session() -> requests.Session:
     s = requests.Session()
     s.headers["User-Agent"] = USER_AGENT
+    s.verify = False  # university certs may have non-standard extensions
     return s
 
 
@@ -40,7 +48,7 @@ def download_pdf(url: str, dest_path: Path, session: Optional[requests.Session] 
     s = session or _session()
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            resp = s.get(url, timeout=30, stream=True)
+            resp = s.get(url, timeout=30, stream=True, verify=False)
             if resp.status_code == 403:
                 raise PermissionError(f"403 Forbidden: {url}")
             if resp.status_code != 200:

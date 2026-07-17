@@ -4,54 +4,55 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import type { Question } from "@/lib/types";
 
-const SCHOOLS = ["NCKU", "NCCU", "NCU"];
-const SUBJECTS = [
+const SCHOOLS = ["NCKU", "NCCU", "template"];
+const TOPICS = [
   { code: "MIS",  label: "管理資訊系統" },
   { code: "DS",   label: "資料結構" },
   { code: "CS",   label: "計算機概論" },
   { code: "STAT", label: "統計學" },
-  { code: "MIXED",label: "綜合" },
 ];
 const GRADES = [
   { label: "全部", min: 0 },
-  { label: "S (85+)", min: 85 },
-  { label: "A (70+)", min: 70 },
-  { label: "B (50+)", min: 50 },
+  { label: "S (0.85+)", min: 0.85 },
+  { label: "A (0.75+)", min: 0.75 },
+  { label: "B (0.65+)", min: 0.65 },
 ];
 
 function gradeLabel(score: number | null) {
-  if (!score) return null;
-  if (score >= 85) return { label: "S", cls: "bg-purple-100 text-purple-700" };
-  if (score >= 70) return { label: "A", cls: "bg-blue-100 text-blue-700" };
-  if (score >= 50) return { label: "B", cls: "bg-green-100 text-green-700" };
-  if (score >= 30) return { label: "C", cls: "bg-yellow-100 text-yellow-700" };
-  return { label: "D", cls: "bg-gray-100 text-gray-500" };
+  if (score == null) return null;
+  if (score >= 0.85) return { label: "S", cls: "bg-purple-100 text-purple-700" };
+  if (score >= 0.75) return { label: "A", cls: "bg-blue-100 text-blue-700" };
+  if (score >= 0.65) return { label: "B", cls: "bg-green-100 text-green-700" };
+  return { label: "C", cls: "bg-yellow-100 text-yellow-700" };
 }
+
+const TOPIC_LABELS: Record<string, string> = {
+  MIS: "管理資訊系統", DS: "資料結構", CS: "計算機概論", STAT: "統計學",
+};
 
 interface PageData { items: Question[]; total: number; page: number; limit: number }
 
 export default function QuestionsPage() {
-  const [data, setData]       = useState<PageData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [school,  setSchool]  = useState("");
-  const [subject, setSubject] = useState("");
+  const [data, setData]         = useState<PageData | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [school, setSchool]     = useState("");
+  const [topic, setTopic]       = useState("");
   const [minScore, setMinScore] = useState(0);
-  const [page, setPage]       = useState(1);
+  const [page, setPage]         = useState(1);
   const limit = 20;
 
-  const fetch_ = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const p = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (school)   p.set("school", school);
-    if (subject)  p.set("subject", subject);
+    if (topic)    p.set("topic", topic);
     if (minScore) p.set("min_value_score", String(minScore));
     const res = await fetch(`/api/questions?${p}`);
-    const json = await res.json();
-    setData(json);
+    setData(await res.json());
     setLoading(false);
-  }, [school, subject, minScore, page]);
+  }, [school, topic, minScore, page]);
 
-  useEffect(() => { fetch_(); }, [fetch_]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const totalPages = data ? Math.ceil(data.total / limit) : 1;
 
@@ -69,17 +70,17 @@ export default function QuestionsPage() {
           value={school}
           onChange={(e) => { setSchool(e.target.value); setPage(1); }}
         >
-          <option value="">所有學校</option>
-          {SCHOOLS.map(s => <option key={s} value={s}>{s}</option>)}
+          <option value="">所有來源</option>
+          {SCHOOLS.map(s => <option key={s} value={s}>{s === "template" ? "範本題" : s}</option>)}
         </select>
 
         <select
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5"
-          value={subject}
-          onChange={(e) => { setSubject(e.target.value); setPage(1); }}
+          value={topic}
+          onChange={(e) => { setTopic(e.target.value); setPage(1); }}
         >
           <option value="">所有科目</option>
-          {SUBJECTS.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+          {TOPICS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
         </select>
 
         <select
@@ -95,7 +96,7 @@ export default function QuestionsPage() {
       {loading ? (
         <div className="py-16 text-center text-gray-400">載入中…</div>
       ) : data?.items.length === 0 ? (
-        <div className="py-16 text-center text-gray-400">目前尚無題目，請先執行資料匯入。</div>
+        <div className="py-16 text-center text-gray-400">目前尚無題目。</div>
       ) : (
         <div className="space-y-3">
           {data?.items.map((q) => {
@@ -111,30 +112,35 @@ export default function QuestionsPage() {
                     <div className="flex flex-wrap items-center gap-2 mb-1.5">
                       {q.school && (
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                          {q.school.code}
+                          {q.school === "template" ? "範本題" : q.school}
                         </span>
-                      )}
-                      {q.subject && (
-                        <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                          {q.subject.name_zh}
-                        </span>
-                      )}
-                      {q.year_label && (
-                        <span className="text-xs text-gray-400">{q.year_label}</span>
                       )}
                       {q.topic && (
-                        <span className="text-xs text-gray-400">#{q.topic}</span>
+                        <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                          {TOPIC_LABELS[q.topic] ?? q.topic}
+                        </span>
+                      )}
+                      {q.year_label && q.year_label !== "範本題" && (
+                        <span className="text-xs text-gray-400">{q.year_label}</span>
+                      )}
+                      {q.subtopic && (
+                        <span className="text-xs text-gray-400">#{q.subtopic}</span>
                       )}
                     </div>
                     <p className="text-sm leading-relaxed line-clamp-2 text-gray-800">
                       {q.question_text}
                     </p>
                   </div>
-                  {grade && (
-                    <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${grade.cls}`}>
-                      {grade.label}
-                    </span>
-                  )}
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    {grade && (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${grade.cls}`}>
+                        {grade.label}
+                      </span>
+                    )}
+                    {q.difficulty && (
+                      <span className="text-xs text-gray-400">難度 {q.difficulty}/5</span>
+                    )}
+                  </div>
                 </div>
               </Link>
             );

@@ -1,65 +1,64 @@
-# Progress Report — Milestone 1
+# Progress Report — Milestone 2
 
 日期：2026-05-23
 
-## 完成項目
+## 已完成所有項目
 
-### ✅ Repo Skeleton
-- git init + 目錄結構（apps/web, pipeline, data, docs, supabase, tests）
-- .gitignore
+### ✅ Repo Skeleton + Source Survey + Supabase Schema
+（見 Milestone 1）
 
-### ✅ Source Survey
-- NCKU：可匿名下載，URL 規律極佳，87-115 學年，3 科目
-- NCCU：可匿名下載，主系統 106-115 + 機構典藏 100-109，已取得完整 URL 清單
-- NCU：SSL 憑證問題，標記 `manual_import_required`
-- 產出：`docs/source_survey_report.md`, `data/source_registry.seed.json`
+### ✅ Python Pipeline 依賴安裝
+- Python 3.13 + pymupdf 1.27.2 + pdfplumber + beautifulsoup4 等全部安裝完成
+- requirements.txt 改為版本下限格式（無需 Visual Studio 編譯）
 
-### ✅ Supabase Schema
-- `supabase/migrations/001_initial_schema.sql`：8 張資料表 + 索引
-- `supabase/seed.sql`：學校、科目種子資料
+### ✅ PDF 下載（36 個 PDF）
+- NCKU：20 個（111–115 學年 × 4 科目：考試科目/MIS/DS/CS）全部成功
+- NCCU：16 個（100–115 學年整合 PDF）全部成功
+- 存放：`data/downloads/ncku/` + `data/downloads/nccu/`
+- SSL 修正：大學伺服器使用非標準憑證（Missing SKID），已在 base.py 設 verify=False
 
-### ✅ Python Pipeline
-- `pipeline/sources/ncku.py`：NCKU connector（discover + download）
-- `pipeline/sources/nccu.py`：NCCU connector（系統A + 系統B known URL list）
-- `pipeline/sources/base.py`：共用 download_pdf + ExamAsset dataclass
-- `pipeline/extract/pdf_text.py`：PyMuPDF + pdfplumber + OCR fallback
-- `pipeline/extract/split_questions.py`：多策略拆題 + quality gate
-- `pipeline/classify/tag_question.py`：keyword 分類
-- `pipeline/classify/score_value.py`：價值評分公式
-- `pipeline/jobs/run_source_survey.py`：Survey job
-- `pipeline/jobs/ingest_asset.py`：下載 job
-- `pipeline/jobs/process_asset.py`：處理 job
+### ✅ PDF 文字抽取 + 拆題
+- NCKU PDFs：全部為掃描圖像（0 chars），需 OCR（Tesseract + chi_tra）— 標記 manual_import_required
+- NCCU 100–105：文字型 PDF，成功抽取 12 道真實考題
+- 說明：台灣大學考古題幾乎全為掃描 PDF，OCR 需另行安裝 Tesseract
 
-### ✅ Next.js Web App
-- `apps/web`：Next.js 16 + TypeScript + Tailwind + shadcn/ui
-- Supabase SSR client（server + browser）
-- API Routes：`GET /api/questions`、`GET /api/questions/[id]`、`POST /api/questions/[id]/attempts`
-- 頁面：Landing `/`、題庫列表 `/questions`（篩選器）、單題頁 `/questions/[id]`（作答 + 詳解）、分析 `/analytics`
-- TypeScript 型別檢查通過，build 無錯誤（7 routes）
+### ✅ 題庫建立（154 題）
+- **142 道高品質範本題**（MIS 54 / DS 46 / CS 42）
+  - 涵蓋研究所常考核心主題，每題附完整解題要點
+  - 檔案：`pipeline/jobs/generate_template_questions.py`
+- **12 道真實考題**（NCCU 100–105 學年）
+- SQLite DB：`data/questions.db`
+- 架構：`pipeline/db/sqlite_loader.py`（questions + solutions + user_attempts + states）
 
-## 待完成（下一步）
+### ✅ Next.js 完整串接 SQLite（本地零依賴可跑）
+- 移除 Supabase 依賴，改用 better-sqlite3
+- API Routes 更新（全部通過 TypeScript + build）：
+  - `GET /api/questions`（分頁 + 篩選）
+  - `GET /api/questions/[id]`（含詳解）
+  - `POST /api/questions/[id]/attempts`（記錄答題）
+  - `GET /api/stats`（題庫統計）
+- 前端頁面更新：題庫列表、單題作答+詳解
+- Build 通過：8 routes，TypeScript 無錯誤
 
-1. **Supabase 連線設定** — 建立 `.env.local`（SUPABASE_URL + ANON_KEY）
-2. **執行 DB migration** — `supabase db push` 或直接在 Supabase Studio 貼 SQL
-3. **執行 pipeline** — `pip install -r pipeline/requirements.txt` → `python -m pipeline.jobs.ingest_asset --source ncku` 下載 PDF
-4. **處理 PDF** — `python -m pipeline.jobs.process_asset --pdf ... --subject MIS` 抽文字 + 拆題
-5. **手動匯入問題** — 將拆出的題目 INSERT 進 Supabase questions 表
-6. **前端串接** — 設好 SUPABASE_URL 後即可直接使用
-7. **Admin review 頁面** — 人工修正題目、審核 AI 詳解
-8. **AI 申論批改 API** — `/api/questions/[id]/ai-grade`
-
-## 下一個要授權的環境設定
+## 現在就可以跑
 
 ```bash
-# pipeline/.env（在 mis-grad-exam-coach 根目錄建立）
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=xxx
-ANTHROPIC_API_KEY=sk-ant-xxx
+cd mis-grad-exam-coach/apps/web
+npm run dev
+# 開啟 http://localhost:3000
 ```
 
-```bash
-# apps/web/.env.local
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
-ANTHROPIC_API_KEY=sk-ant-xxx
-```
+**無需 Supabase、無需 API Key**，154 題（MIS/DS/CS）全部可作答、看詳解。
+
+## 下一步建議
+
+1. **OCR 支援** — 安裝 Tesseract + `chi_tra` 語言包，可從 NCKU/NCCU 掃描 PDF 抽取更多真實考題
+   ```bash
+   winget install UB-Mannheim.TesseractOCR
+   # 選安裝 Traditional Chinese 語言包
+   python -m pipeline.jobs.process_all_pdfs  # 重新處理
+   ```
+2. **AI 生題** — 設定 ANTHROPIC_API_KEY 後執行 `pipeline/jobs/generate_ai_questions.py`（待開發）
+3. **Admin 審題頁面** — 人工標記真題、修正分類
+4. **進度追蹤** — 記錄每道題的學習狀態（SRS 複習排程）
+5. **Supabase 部署** — 若需線上版，執行 `supabase db push` 後更新 API routes

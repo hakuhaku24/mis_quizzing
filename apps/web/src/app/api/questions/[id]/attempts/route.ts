@@ -1,33 +1,61 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getWriteDb } from "@/lib/db";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createClient();
   const body = await req.json();
+  const { answer_text, selected_option, is_correct, time_spent_seconds } = body;
 
-  const { answer_text, selected_option, time_spent_seconds } = body;
-  // For MVP, use a fixed demo user_id
-  const user_id = body.user_id ?? "00000000-0000-0000-0000-000000000001";
+  const db = getWriteDb();
 
-  const { data: attempt, error } = await supabase
-    .from("user_attempts")
-    .insert({ question_id: id, user_id, answer_text, selected_option, time_spent_seconds })
-    .select()
-    .single();
+  const result = db
+    .prepare(
+      `INSERT INTO user_attempts
+         (question_id, answer_text, selected_option, is_correct, time_spent_seconds)
+       VALUES (?, ?, ?, ?, ?)`
+    )
+    .run(id, answer_text ?? null, selected_option ?? null, is_correct ?? null, time_spent_seconds ?? null);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const attemptId = result.lastInsertRowid;
 
-  // Upsert user_question_state
-  await supabase.from("user_question_states").upsert({
-    user_id,
-    question_id: id,
-    status: "learning",
-    last_attempt_at: new Date().toISOString(),
-  }, { onConflict: "user_id,question_id" });
+  // Derive status and update counts based on is_correct
+  if (is_correct === 1) {
+    db.prepare(`
+      INSERT INTO user_question_states (question_id, status, last_attempt_at, correct_count, mastery_score)
+      VALUES (?, 'reviewing', datetime('now'), 1, 1.0)
+      ON CONFLICT(question_id) DO UPDATE SET
+        status = 'reviewing',
+        last_attempt_at = datetime('now'),
+        correct_count = correct_count + 1,
+        mastery_score = CAST(correct_count + 1 AS REAL) / (correct_count + wrong_count + 1),
+        updated_at = datetime('now')
+    `).run(id);
+  } else if (is_correct === 0) {
+    db.prepare(`
+      INSERT INTO user_question_states (question_id, status, last_attempt_at, wrong_count)
+      VALUES (?, 'wrong', datetime('now'), 1)
+      ON CONFLICT(question_id) DO UPDATE SET
+        status = 'wrong',
+        last_attempt_at = datetime('now'),
+        wrong_count = wrong_count + 1,
+        mastery_score = CAST(correct_count AS REAL) / (correct_count + wrong_count + 1),
+        updated_at = datetime('now')
+    `).run(id);
+  } else {
+    db.prepare(`
+      INSERT INTO user_question_states (question_id, status, last_attempt_at)
+      VALUES (?, 'learning', datetime('now'))
+      ON CONFLICT(question_id) DO UPDATE SET
+        status = CASE WHEN status = 'new' THEN 'learning' ELSE status END,
+        last_attempt_at = datetime('now'),
+        updated_at = datetime('now')
+    `).run(id);
+  }
 
-  return NextResponse.json(attempt, { status: 201 });
+  db.close();
+
+  return NextResponse.json({ id: attemptId }, { status: 201 });
 }
