@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { stripMarkup } from "@/lib/text";
 
 const TOPIC_LABELS: Record<string, string> = {
   MIS: "管理資訊系統", DS: "資料結構", CS: "計算機概論", STAT: "統計學",
@@ -168,7 +169,7 @@ export default function HistoryPage() {
                       onClick={() => setExpanded(open ? null : a.id)}
                       className="text-left text-sm text-gray-800 hover:text-blue-600 line-clamp-2 w-full"
                     >
-                      {a.question_text}
+                      {stripMarkup(a.question_text)}
                     </button>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-xs text-gray-400">{TOPIC_LABELS[a.topic] ?? a.topic}</span>

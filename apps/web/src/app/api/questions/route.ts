@@ -28,6 +28,9 @@ export async function GET(req: NextRequest) {
   const year = searchParams.get("year");
   if (year) { conditions.push("year_label = ?"); params.push(`${year}學年度`); }
 
+  const difficulty = searchParams.get("difficulty");
+  if (difficulty) { conditions.push("difficulty = ?"); params.push(parseInt(difficulty)); }
+
   const minScore = searchParams.get("min_value_score");
   if (minScore) { conditions.push("value_score >= ?"); params.push(parseFloat(minScore)); }
 

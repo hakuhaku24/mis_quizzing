@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { stripMarkup } from "@/lib/text";
 
 // 筆試約在 2027 年 2 月（各校 12 月–2 月），要改考期改這裡
 const EXAM_DATE = new Date("2027-02-01T00:00:00+08:00");
@@ -136,7 +137,7 @@ export default function HomePage() {
                       {SLOT_META[d.slot]?.label ?? "加練"}
                     </span>
                     <span className={`flex-1 text-sm truncate group-hover:text-blue-600 ${d.done_today ? "line-through" : ""}`}>
-                      {d.question_text}
+                      {stripMarkup(d.question_text)}
                     </span>
                     <span className="text-xs text-gray-400 shrink-0 hidden sm:inline">
                       {d.subtopic ? `#${d.subtopic}` : TOPIC_LABELS[d.topic] ?? d.topic}

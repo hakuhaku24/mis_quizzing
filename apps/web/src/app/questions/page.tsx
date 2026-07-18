@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { stripMarkup } from "@/lib/text";
 import type { Question } from "@/lib/types";
 
 const SCHOOLS = ["NCU", "NCKU", "NCCU", "template"];
@@ -46,26 +47,42 @@ export default function QuestionsPage() {
 
 function QuestionsPageInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const [data, setData]         = useState<PageData | null>(null);
   const [loading, setLoading]   = useState(false);
-  const [school, setSchool]     = useState("");
-  const [topic, setTopic]       = useState(searchParams.get("topic") ?? "");
-  const [concept, setConcept]   = useState(searchParams.get("concept") ?? "");
-  const [minScore, setMinScore] = useState(0);
-  const [page, setPage]         = useState(1);
+  // filters live in the URL so back-navigation restores them
+  const school     = searchParams.get("school") ?? "";
+  const topic      = searchParams.get("topic") ?? "";
+  const concept    = searchParams.get("concept") ?? "";
+  const year       = searchParams.get("year") ?? "";
+  const difficulty = searchParams.get("difficulty") ?? "";
+  const minScore   = Number(searchParams.get("min_value_score") ?? 0);
+  const page       = Math.max(1, Number(searchParams.get("page") ?? 1));
   const limit = 20;
+
+  const setFilter = (patch: Record<string, string>) => {
+    const p = new URLSearchParams(searchParams.toString());
+    if (!("page" in patch)) p.delete("page"); // filter change resets pagination
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) p.set(k, v); else p.delete(k);
+    }
+    router.replace(`${pathname}?${p.toString()}`, { scroll: false });
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     const p = new URLSearchParams({ page: String(page), limit: String(limit) });
-    if (school)   p.set("school", school);
-    if (topic)    p.set("topic", topic);
-    if (concept)  p.set("concept", concept);
-    if (minScore) p.set("min_value_score", String(minScore));
+    if (school)     p.set("school", school);
+    if (topic)      p.set("topic", topic);
+    if (concept)    p.set("concept", concept);
+    if (year)       p.set("year", year);
+    if (difficulty) p.set("difficulty", difficulty);
+    if (minScore)   p.set("min_value_score", String(minScore));
     const res = await fetch(`/api/questions?${p}`);
     setData(await res.json());
     setLoading(false);
-  }, [school, topic, concept, minScore, page]);
+  }, [school, topic, concept, year, difficulty, minScore, page]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -83,7 +100,7 @@ function QuestionsPageInner() {
         <select
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5"
           value={school}
-          onChange={(e) => { setSchool(e.target.value); setPage(1); }}
+          onChange={(e) => setFilter({ school: e.target.value })}
         >
           <option value="">所有來源</option>
           {SCHOOLS.map(s => <option key={s} value={s}>{SCHOOL_LABELS[s] ?? s}</option>)}
@@ -92,7 +109,7 @@ function QuestionsPageInner() {
         <select
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5"
           value={topic}
-          onChange={(e) => { setTopic(e.target.value); setPage(1); }}
+          onChange={(e) => setFilter({ topic: e.target.value })}
         >
           <option value="">所有科目</option>
           {TOPICS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
@@ -100,8 +117,28 @@ function QuestionsPageInner() {
 
         <select
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5"
+          value={year}
+          onChange={(e) => setFilter({ year: e.target.value })}
+        >
+          <option value="">所有年份</option>
+          {Array.from({ length: 11 }, (_, i) => 115 - i).map(y => (
+            <option key={y} value={y}>{y} 學年</option>
+          ))}
+        </select>
+
+        <select
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5"
+          value={difficulty}
+          onChange={(e) => setFilter({ difficulty: e.target.value })}
+        >
+          <option value="">所有難度</option>
+          {[1, 2, 3, 4, 5].map(d => <option key={d} value={d}>難度 {d}</option>)}
+        </select>
+
+        <select
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5"
           value={minScore}
-          onChange={(e) => { setMinScore(Number(e.target.value)); setPage(1); }}
+          onChange={(e) => setFilter({ min_value_score: e.target.value === "0" ? "" : e.target.value })}
         >
           {GRADES.map(g => <option key={g.label} value={g.min}>{g.label}</option>)}
         </select>
@@ -110,7 +147,7 @@ function QuestionsPageInner() {
           <span className="flex items-center gap-1.5 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5">
             #{concept}
             <button
-              onClick={() => { setConcept(""); setPage(1); }}
+              onClick={() => setFilter({ concept: "" })}
               className="text-blue-400 hover:text-blue-700"
               aria-label="清除知識點篩選"
             >
@@ -158,7 +195,7 @@ function QuestionsPageInner() {
                       )}
                     </div>
                     <p className="text-sm leading-relaxed line-clamp-2 text-gray-800">
-                      {q.question_text}
+                      {stripMarkup(q.question_text)}
                     </p>
                   </div>
                   <div className="shrink-0 flex flex-col items-end gap-1">
@@ -182,7 +219,7 @@ function QuestionsPageInner() {
       {totalPages > 1 && (
         <div className="flex justify-center gap-2">
           <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => setFilter({ page: String(Math.max(1, page - 1)) })}
             disabled={page === 1}
             className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40"
           >
@@ -192,7 +229,7 @@ function QuestionsPageInner() {
             {page} / {totalPages}
           </span>
           <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => setFilter({ page: String(Math.min(totalPages, page + 1)) })}
             disabled={page === totalPages}
             className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40"
           >

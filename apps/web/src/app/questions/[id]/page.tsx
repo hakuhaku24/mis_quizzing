@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { use } from "react";
+import RichText from "@/components/RichText";
 import { gotPointText } from "@/lib/types";
 import type { AiGrade, Confidence, ErrorType, Question, Solution } from "@/lib/types";
 
@@ -195,7 +196,7 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
             </span>
           </div>
         </div>
-        <p className="text-base leading-relaxed whitespace-pre-wrap">{question.question_text}</p>
+        <RichText className="text-base leading-relaxed space-y-2">{question.question_text}</RichText>
       </div>
 
       {/* Answer area */}
@@ -231,7 +232,7 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
                     disabled={submitted}
                     className="mt-0.5 accent-blue-600 shrink-0"
                   />
-                  <span className="text-sm leading-relaxed">{opt}</span>
+                  <RichText className="text-sm leading-relaxed flex-1">{opt}</RichText>
                   {submitted && isRight && (
                     <span className="ml-auto text-green-600 text-xs font-semibold shrink-0">✓ 正確答案</span>
                   )}
@@ -450,11 +451,11 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
           </div>
           {solution ? (
             <>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">{solution.solution_text}</p>
+              <RichText className="text-sm leading-relaxed space-y-2">{solution.solution_text}</RichText>
               {solution.explanation && (
-                <p className="text-sm text-gray-500 leading-relaxed border-t border-gray-100 pt-3">
-                  {solution.explanation}
-                </p>
+                <div className="border-t border-gray-100 pt-3">
+                  <RichText className="text-sm text-gray-500 leading-relaxed space-y-2">{solution.explanation}</RichText>
+                </div>
               )}
             </>
           ) : (
