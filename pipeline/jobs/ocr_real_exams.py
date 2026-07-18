@@ -24,7 +24,9 @@ import fitz  # pymupdf
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = ["ncu_central", "nsysu"]
-MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+# llama-4-scout vanished from the account mid-run (Groq rotates preview models);
+# qwen3.6-27b takes images too and transcribes at the same quality.
+MODEL = "qwen/qwen3.6-27b"
 RENDER_SCALE = 2.0
 
 PROMPT = (
@@ -56,7 +58,8 @@ def transcribe_page(key: str, png: bytes) -> str:
             ],
         }],
         "temperature": 0,
-        "max_tokens": 4096,
+        "max_tokens": 8192,
+        "reasoning_format": "hidden",  # qwen3.6 is a reasoning model; drop <think>
     }
     req = urllib.request.Request(
         "https://api.groq.com/openai/v1/chat/completions",
