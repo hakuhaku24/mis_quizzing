@@ -76,8 +76,8 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
     setSubmitting(true);
     const timeSpent = Math.round((Date.now() - startTime) / 1000);
     let correct: boolean | null = null;
-    if (isMC) {
-      correct = selectedOption === question?.correct_option;
+    if (isMC && question?.correct_option) {
+      correct = selectedOption === question.correct_option;
       setIsCorrect(correct);
     }
     const res = await fetch(`/api/questions/${id}/attempts`, {
@@ -209,10 +209,12 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
               const isSelected = selectedOption === letter;
               const isRight = letter === question.correct_option;
               let cls = "flex items-start gap-3 p-3 rounded-lg border transition-colors ";
-              if (submitted) {
+              if (submitted && question.correct_option) {
                 if (isRight) cls += "bg-green-50 border-green-400 text-green-800";
                 else if (isSelected) cls += "bg-red-50 border-red-400 text-red-700 line-through";
                 else cls += "border-gray-100 text-gray-400";
+              } else if (submitted) {
+                cls += isSelected ? "border-blue-400 bg-blue-50 text-blue-800" : "border-gray-100 text-gray-400";
               } else {
                 cls += isSelected
                   ? "border-blue-400 bg-blue-50 text-blue-800 cursor-pointer"
@@ -360,8 +362,15 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
               </div>
             )}
 
+            {/* Real MC without an official key: no auto-judgement possible */}
+            {isMC && submitted && !question.correct_option && (
+              <p className="text-sm text-orange-600 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                此真題暫無官方答案，請對照詳解或自行查證後自評。
+              </p>
+            )}
+
             {/* Essay self-assessment */}
-            {!isMC && (
+            {(!isMC || (submitted && !question.correct_option)) && (
               <div className="space-y-2">
                 <p className="text-sm text-gray-500">{aiGrade ? "（也可以手動自評）" : "或對照詳解後自評："}</p>
                 <div className="flex gap-2 flex-wrap">

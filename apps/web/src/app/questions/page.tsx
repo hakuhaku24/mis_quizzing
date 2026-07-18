@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { Question } from "@/lib/types";
 
-const SCHOOLS = ["NCKU", "NCCU", "template"];
+const SCHOOLS = ["NCU", "NCKU", "NCCU", "template"];
+const SCHOOL_LABELS: Record<string, string> = {
+  NCU: "中央（真題）", NCKU: "成大", NCCU: "政大", template: "範本題",
+};
 const TOPICS = [
   { code: "MIS",  label: "管理資訊系統" },
   { code: "DS",   label: "資料結構" },
@@ -83,7 +86,7 @@ function QuestionsPageInner() {
           onChange={(e) => { setSchool(e.target.value); setPage(1); }}
         >
           <option value="">所有來源</option>
-          {SCHOOLS.map(s => <option key={s} value={s}>{s === "template" ? "範本題" : s}</option>)}
+          {SCHOOLS.map(s => <option key={s} value={s}>{SCHOOL_LABELS[s] ?? s}</option>)}
         </select>
 
         <select
@@ -136,8 +139,10 @@ function QuestionsPageInner() {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-1.5">
                       {q.school && (
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                          {q.school === "template" ? "範本題" : q.school}
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          q.school === "NCU" ? "bg-amber-100 text-amber-800 font-semibold" : "bg-gray-100 text-gray-600"
+                        }`}>
+                          {SCHOOL_LABELS[q.school] ?? q.school}
                         </span>
                       )}
                       {q.topic && (
