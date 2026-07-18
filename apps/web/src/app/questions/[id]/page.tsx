@@ -299,10 +299,17 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
           <div className="space-y-3">
             {/* MC result banner */}
             {isMC && isCorrect !== null && (
-              <div className={`text-sm font-semibold px-4 py-2 rounded-lg inline-block ${
-                isCorrect ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-              }`}>
-                {isCorrect ? "✓ 答對了！" : `✗ 答錯了，正確答案是 ${question.correct_option}`}
+              <div className="space-y-1">
+                <div className={`text-sm font-semibold px-4 py-2 rounded-lg inline-block ${
+                  isCorrect ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                }`}>
+                  {isCorrect ? "✓ 答對了！" : `✗ 答錯了，正確答案是 ${question.correct_option}`}
+                </div>
+                {solution?.verified_status === "ai_draft" && (
+                  <p className="text-xs text-orange-500">
+                    ⚠ 對照的是 AI 草稿答案（未人工驗證），若有疑義請自行查證
+                  </p>
+                )}
               </div>
             )}
 
