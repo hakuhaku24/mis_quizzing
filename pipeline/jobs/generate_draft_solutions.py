@@ -83,6 +83,7 @@ def llm(key: str, system: str, user: str) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--id", type=int, default=0, help="only this question id")
     args = ap.parse_args()
 
     key = api_key()
@@ -94,6 +95,8 @@ def main() -> None:
              AND NOT EXISTS (SELECT 1 FROM solutions s WHERE s.question_id = q.id)
            ORDER BY q.exam_year DESC, q.id"""
     ).fetchall()
+    if args.id:
+        rows = [r for r in rows if r[0] == args.id]
     if args.limit:
         rows = rows[: args.limit]
     print(f"{len(rows)} questions to solve", flush=True)

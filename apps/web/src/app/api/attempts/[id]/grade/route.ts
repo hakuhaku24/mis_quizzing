@@ -29,10 +29,12 @@ name_checks 規則（先做這一步，再評分）：把考生答案中出現�
 5. 你是領域專家：若參考詳解本身有不精確或過度簡化之處，照詳解給分，但可在 feedback 補充更精確的說法（例：詳解稱 Windows 為 monolithic，可補充 Windows NT 嚴格而言是 hybrid kernel）。`;
 
 const VERIFIER_SYSTEM = `你是批改結果的審核員。輸入是題目的參考詳解，以及一組「得分點＋考生原文引文」。
-逐一判斷：這段引文的內容是否【正確地】表達了該得分點？
-- 引文內容與詳解相符 → valid: true
-- 引文內容錯誤、與詳解相反（如順序寫反、性質對調），或缺少該得分點的關鍵性質（如遞增/由小到大、方向、複雜度數值）→ valid: false，reason 說明錯在哪、正確版本為何
-只輸出 JSON（無 markdown）：{"checks": [{"index": 0, "valid": true, "reason": "..."}]}，index 對應輸入順序。`;
+逐一判斷引文與該得分點的關係，verdict 三選一：
+- "valid"：引文內容正確，且支撐該得分點的【核心主張】（用詞不精確、口語化、只寫到大意都算 valid，不要求完整）
+- "partial"：引文內容正確、與詳解不矛盾，但只涵蓋該得分點的一部分（缺細節、缺完整列舉）——這仍算有答到，不是錯
+- "wrong"：引文內容與詳解【相反】或包含錯誤事實（如順序寫反、性質對調、優缺點張冠李戴），或該得分點的核心主張在引文中完全沒有出現（例：得分點說「輸出遞增序列」，引文只說「看出排列」——「遞增」這個核心性質沒被寫出來）
+注意：「不完整」不是 wrong。只有「錯誤」或「核心主張缺席」才是 wrong。
+只輸出 JSON（無 markdown）：{"checks": [{"index": 0, "verdict": "valid|partial|wrong", "reason": "..."}]}，index 對應輸入順序。`;
 
 export async function POST(
   req: NextRequest,
@@ -68,13 +70,13 @@ export async function POST(
         }
       | undefined;
 
-    if (!row) return NextResponse.json({ error: "attempt not found" }, { status: 404 });
+    if (!row) return NextResponse.json({ error: "找不到這筆作答" }, { status: 404 });
     if (row.question_type === "multiple_choice")
-      return NextResponse.json({ error: "MC questions are auto-graded" }, { status: 400 });
+      return NextResponse.json({ error: "選擇題自動判分，無需 AI 批改" }, { status: 400 });
     if (!row.answer_text?.trim())
-      return NextResponse.json({ error: "no answer to grade" }, { status: 400 });
+      return NextResponse.json({ error: "沒有作答內容可批改" }, { status: 400 });
     if (!row.solution_text)
-      return NextResponse.json({ error: "question has no solution to grade against" }, { status: 400 });
+      return NextResponse.json({ error: "此題尚未生成詳解（背景生成中，稍後再試）" }, { status: 400 });
 
     // Already graded → return the stored grade instead of paying again (unless force)
     if (row.ai_feedback && !force) {
@@ -186,25 +188,29 @@ export async function POST(
         });
         if (vresp.ok) {
           const vdata = await vresp.json();
-          const checks: { index: number; valid: boolean; reason?: string }[] =
+          const checks: { index: number; verdict?: string; valid?: boolean; reason?: string }[] =
             JSON.parse(vdata.choices[0].message.content).checks ?? [];
-          const rejected = new Set(checks.filter((c) => !c.valid).map((c) => c.index));
-          if (rejected.size) {
-            const kept: typeof structured = [];
-            structured.forEach((gp, i) => {
-              if (rejected.has(i)) {
-                const reason = checks.find((c) => c.index === i)?.reason;
-                grade!.wrong_points = [
-                  ...(grade!.wrong_points ?? []),
-                  `${gp.point}：${reason ?? "引文內容與詳解不符"}`,
-                ];
-                droppedPoints += 1;
-              } else {
-                kept.push(gp);
-              }
-            });
-            grade.got_points = kept;
-          }
+          const verdictOf = (i: number) => {
+            const c = checks.find((x) => x.index === i);
+            if (!c) return "valid";
+            if (c.verdict) return c.verdict;
+            return c.valid === false ? "wrong" : "valid"; // legacy shape
+          };
+          const kept: typeof structured = [];
+          structured.forEach((gp, i) => {
+            const v = verdictOf(i);
+            if (v === "wrong") {
+              const reason = checks.find((c) => c.index === i)?.reason;
+              grade!.wrong_points = [
+                ...(grade!.wrong_points ?? []),
+                `${gp.point}：${reason ?? "引文內容與詳解不符"}`,
+              ];
+              droppedPoints += 1;
+            } else {
+              kept.push(v === "partial" ? { ...gp, point: `${gp.point}（部分）` } : gp);
+            }
+          });
+          grade.got_points = kept;
         }
       } catch (e) {
         console.error("grade verifier pass failed, keeping first-pass result:", e);
