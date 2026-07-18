@@ -27,7 +27,9 @@ SOURCES = ["ncu_central", "nsysu"]
 # llama-4-scout vanished from the account mid-run (Groq rotates preview models);
 # qwen3.6-27b takes images too and transcribes at the same quality.
 MODEL = "qwen/qwen3.6-27b"
-RENDER_SCALE = 2.0
+# x1.4 keeps the TPM estimate for one request under qwen's 8000/min free tier
+RENDER_SCALE = 1.4
+PAGE_SLEEP = 25
 
 PROMPT = (
     "這是台灣研究所入學考試考卷的掃描頁。請逐字轉錄頁面上的所有文字，繁體中文與英文照原文抄錄，"
@@ -45,7 +47,7 @@ def api_key() -> str:
     raise SystemExit("GROQ_API_KEY not found in apps/web/.env.local")
 
 
-def transcribe_page(key: str, png: bytes) -> str:
+def transcribe_page(key: str, img: bytes) -> str:
     body = {
         "model": MODEL,
         "messages": [{
@@ -53,13 +55,13 @@ def transcribe_page(key: str, png: bytes) -> str:
             "content": [
                 {"type": "text", "text": PROMPT},
                 {"type": "image_url", "image_url": {
-                    "url": "data:image/png;base64," + base64.b64encode(png).decode()
+                    "url": "data:image/jpeg;base64," + base64.b64encode(img).decode()
                 }},
             ],
         }],
         "temperature": 0,
-        "max_tokens": 8192,
-        "reasoning_format": "hidden",  # qwen3.6 is a reasoning model; drop <think>
+        "max_tokens": 3500,          # counted into the TPM estimate — keep tight
+        "reasoning_effort": "none",  # transcription needs no thinking tokens
     }
     req = urllib.request.Request(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -76,9 +78,11 @@ def transcribe_page(key: str, png: bytes) -> str:
                 data = json.load(r)
             return data["choices"][0]["message"]["content"]
         except urllib.error.HTTPError as e:
-            if e.code in (429, 500, 502, 503):
+            if e.code in (413, 429, 500, 502, 503):
+                # 413 here is Groq's TPM estimator, not actual payload size —
+                # wait for the minute window like a 429
                 wait = int(e.headers.get("retry-after") or 2 ** (attempt + 2))
-                wait = min(wait + 5, 900)  # honor retry-after fully (daily/TPM buckets)
+                wait = min(max(wait + 5, 65 if e.code == 413 else 0), 900)
                 print(f"    HTTP {e.code}, retry in {wait}s", flush=True)
                 time.sleep(wait)
                 continue
@@ -117,11 +121,11 @@ def main() -> None:
             outdir.mkdir(parents=True, exist_ok=True)
             print(f"{source}/{pdf.name}: {len(missing)}/{len(doc)} pages to do", flush=True)
             for i in missing:
-                png = doc[i].get_pixmap(matrix=fitz.Matrix(RENDER_SCALE, RENDER_SCALE)).tobytes("png")
-                text = transcribe_page(key, png)
+                img = doc[i].get_pixmap(matrix=fitz.Matrix(RENDER_SCALE, RENDER_SCALE)).tobytes("jpeg")
+                text = transcribe_page(key, img)
                 (outdir / f"page_{i+1:02d}.txt").write_text(text, encoding="utf-8")
                 print(f"    page {i+1}/{len(doc)} ok ({len(text)} chars)", flush=True)
-                time.sleep(1.5)  # stay under rate limits
+                time.sleep(PAGE_SLEEP)  # pace under the 8000 TPM free tier
             doc.close()
             done_pdfs += 1
     print("done")
