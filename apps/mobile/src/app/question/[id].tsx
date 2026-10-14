@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import RichText from "../../components/RichText";
-import { getQuestion, submitAttempt, setSelfAssessment, setErrorType, gradeAttempt } from "../../lib/attempts";
+import { getQuestion, getAttempt, submitAttempt, setSelfAssessment, setErrorType, gradeAttempt } from "../../lib/attempts";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { AiGrade, Confidence, ErrorType, Question, SelfAssessment, Solution } from "../../lib/types";
 
@@ -22,7 +22,12 @@ function parseOptions(q: Question): string[] {
 }
 
 export default function QuestionScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, attempt } = useLocalSearchParams<{ id: string; attempt?: string }>();
+  // key forces a fresh screen state when switching from a saved attempt to "practice again"
+  return <QuestionView key={`${id}-${attempt ?? "new"}`} id={Number(id)} savedAttemptId={attempt ? Number(attempt) : null} />;
+}
+
+function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: number | null }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [question, setQuestion] = useState<Question | null>(null);
@@ -40,12 +45,28 @@ export default function QuestionScreen() {
   const [grading, setGrading] = useState(false);
   const [gradeError, setGradeError] = useState<string | null>(null);
   const [startTime] = useState(() => Date.now());
+  const [savedAt, setSavedAt] = useState<string | null>(null);
 
   useEffect(() => {
-    getQuestion(Number(id))
-      .then(({ question, solution }) => { setQuestion(question); setSolution(solution); })
+    Promise.all([getQuestion(id), savedAttemptId ? getAttempt(savedAttemptId) : Promise.resolve(null)])
+      .then(([{ question, solution }, saved]) => {
+        setQuestion(question);
+        setSolution(solution);
+        if (saved) {
+          setAttemptId(saved.id);
+          setAnswer(saved.answer_text ?? "");
+          setSelectedOption(saved.selected_option ?? "");
+          setIsCorrect(saved.is_correct);
+          setConfidence(saved.confidence);
+          setSelfAssessmentState(saved.self_assessment);
+          setErrorTypeState(saved.error_type);
+          setAiGrade(saved.ai_feedback);
+          setSavedAt(saved.created_at);
+          setSubmitted(true);
+        }
+      })
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, savedAttemptId]);
 
   if (loading) {
     return (
@@ -128,12 +149,18 @@ export default function QuestionScreen() {
         <Pressable style={styles.iconButton} onPress={() => router.back()}>
           <Ionicons name="close" size={18} color={colors.ink2} />
         </Pressable>
-        <Text style={styles.topBarTitle}>{submitted ? "作答結果" : "作答"}</Text>
+        <Text style={styles.topBarTitle}>{savedAt ? "作答紀錄" : submitted ? "作答結果" : "作答"}</Text>
         <View style={{ width: 34 }} />
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content}>
+          {savedAt && (
+            <Text style={styles.savedAt}>
+              {new Date(savedAt).toLocaleString("zh-TW", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })} 作答
+              {confidence ? ` · 送出前：${CONFIDENCE_META[confidence]}` : ""}
+            </Text>
+          )}
           <View style={styles.card}>
             <View style={styles.tagRow}>
               {question.school && <Tag text={question.school === "template" ? "範本題" : question.school} />}
@@ -283,6 +310,13 @@ export default function QuestionScreen() {
               )}
             </View>
           )}
+
+          {savedAt && (
+            <Pressable style={styles.retryButton} onPress={() => router.replace(`/question/${id}`)}>
+              <Ionicons name="refresh" size={16} color={colors.accent} />
+              <Text style={styles.retryButtonText}>再練一次</Text>
+            </Pressable>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -353,6 +387,9 @@ const styles = StyleSheet.create({
   gradeButton: { backgroundColor: colors.aiAccent, borderRadius: radius.md, paddingVertical: 12, alignItems: "center" },
   gradeButtonText: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
   errorText: { color: colors.danger, fontSize: 12, marginTop: 4 },
+  savedAt: { fontSize: 11.5, color: colors.ink3, paddingHorizontal: 2 },
+  retryButton: { flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.accent, borderRadius: radius.md, paddingVertical: 12, backgroundColor: colors.surface },
+  retryButtonText: { color: colors.accent, fontWeight: "700", fontSize: 14 },
   aiCard: { backgroundColor: colors.aiSoft, borderWidth: 1, borderColor: colors.aiLine, borderRadius: radius.md, padding: spacing.md, gap: spacing.md },
   aiHeaderRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   aiScore: { fontSize: 22, fontWeight: "800", color: colors.aiAccent },

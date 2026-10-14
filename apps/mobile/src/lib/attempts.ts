@@ -11,6 +11,27 @@ export async function getQuestion(id: number): Promise<{ question: Question; sol
   return { question: question as Question, solution: (solutions?.[0] as Solution) ?? null };
 }
 
+export interface SavedAttempt {
+  id: number;
+  answer_text: string | null;
+  selected_option: string | null;
+  is_correct: boolean | null;
+  confidence: Confidence | null;
+  self_assessment: SelfAssessment | null;
+  error_type: ErrorType | null;
+  ai_feedback: AiGrade | null;
+  created_at: string;
+}
+
+export async function getAttempt(attemptId: number): Promise<SavedAttempt | null> {
+  const { data } = await supabase
+    .from("user_attempts")
+    .select("id, answer_text, selected_option, is_correct, confidence, self_assessment, error_type, ai_feedback, created_at")
+    .eq("id", attemptId)
+    .single();
+  return (data as SavedAttempt) ?? null;
+}
+
 export interface SubmitAttemptInput {
   question_id: number;
   answer_text?: string;

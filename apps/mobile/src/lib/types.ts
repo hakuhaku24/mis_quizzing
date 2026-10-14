@@ -34,6 +34,7 @@ export interface Solution {
 export interface DailyItem extends Question {
   slot: Slot;
   done_today: boolean;
+  today_attempt_id: number | null;
 }
 
 export interface AiGradePoint {

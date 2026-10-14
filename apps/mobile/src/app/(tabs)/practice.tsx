@@ -41,7 +41,9 @@ export default function PracticeListScreen() {
           return (
             <Pressable
               style={[styles.row, item.done_today && styles.rowDone]}
-              onPress={() => router.push(`/question/${item.id}`)}
+              onPress={() =>
+                router.push(item.today_attempt_id ? `/question/${item.id}?attempt=${item.today_attempt_id}` : `/question/${item.id}`)
+              }
             >
               <View style={[styles.chip, { backgroundColor: meta.bg }]}>
                 <Text style={[styles.chipText, { color: meta.color }]}>{meta.label}</Text>

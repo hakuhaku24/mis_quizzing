@@ -38,7 +38,7 @@ export default function HistoryScreen() {
         renderItem={({ item }) => {
           const badge = badgeFor(item);
           return (
-            <Pressable style={styles.row} onPress={() => router.push(`/question/${item.question_id}`)}>
+            <Pressable style={styles.row} onPress={() => router.push(`/question/${item.question_id}?attempt=${item.id}`)}>
               <View style={[styles.badge, { backgroundColor: badge.bg }]}>
                 <Text style={[styles.badgeText, { color: badge.color }]}>{badge.text}</Text>
               </View>

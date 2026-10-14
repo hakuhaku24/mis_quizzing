@@ -39,7 +39,7 @@ export async function getDailyTasks(): Promise<DailyItem[]> {
       .in("topic", DAILY_TOPICS),
     supabase
       .from("user_attempts")
-      .select("question_id, is_correct, ai_score, self_assessment, created_at")
+      .select("id, question_id, is_correct, ai_score, self_assessment, created_at")
       .eq("user_id", userId),
     supabase
       .from("user_question_states")
@@ -57,9 +57,13 @@ export async function getDailyTasks(): Promise<DailyItem[]> {
     attemptsByQ.set(a.question_id, list);
   }
 
-  const attemptedToday = new Set(
-    (attempts ?? []).filter((a) => a.created_at.slice(0, 10) === todayStart).map((a) => a.question_id)
-  );
+  // question_id -> latest attempt id made today
+  const attemptedToday = new Map<number, number>();
+  for (const a of attempts ?? []) {
+    if (a.created_at.slice(0, 10) !== todayStart) continue;
+    const prev = attemptedToday.get(a.question_id);
+    if (prev === undefined || a.id > prev) attemptedToday.set(a.question_id, a.id);
+  }
 
   // weakest concepts across attempted CS/DS questions, mastery < 0.7
   const conceptScores = new Map<string, number[]>();
@@ -152,5 +156,6 @@ export async function getDailyTasks(): Promise<DailyItem[]> {
     ...(q as DailyItem),
     slot: slotOf(q.id),
     done_today: attemptedToday.has(q.id),
+    today_attempt_id: attemptedToday.get(q.id) ?? null,
   }));
 }
