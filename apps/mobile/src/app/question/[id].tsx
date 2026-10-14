@@ -149,7 +149,7 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
     setGrading(true);
     setGradeError(null);
     try {
-      setAiGrade(await gradeAttempt(attemptId));
+      setAiGrade(await gradeAttempt(attemptId, question.id));
     } catch (e) {
       setGradeError(e instanceof Error && e.message ? e.message : "批改失敗，請稍後再試");
     }

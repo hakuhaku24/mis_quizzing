@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { applySrs, claimSrsSlot } from "./srs";
+import { syncReview } from "./srs";
 import type { AiGrade, Confidence, ErrorType, Question, SelfAssessment, Solution } from "./types";
 
 export async function getQuestion(id: number): Promise<{ question: Question; solution: Solution | null }> {
@@ -61,12 +61,8 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<number> 
     .single();
   if (error || !data) throw error ?? new Error("送出失敗");
 
-  // MC correctness is known immediately — feed the scheduler now.
-  if (input.is_correct === true || input.is_correct === false) {
-    if (await claimSrsSlot(data.id)) {
-      await applySrs(input.question_id, input.is_correct ? 1 : 0);
-    }
-  }
+  // MC correctness is known immediately
+  if (input.is_correct === true || input.is_correct === false) await syncReview(input.question_id);
 
   return data.id as number;
 }
@@ -74,14 +70,11 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<number> 
 export async function setSelfAssessment(attemptId: number, assessment: SelfAssessment): Promise<void> {
   const { data: attempt } = await supabase
     .from("user_attempts")
-    .select("question_id")
+    .update({ self_assessment: assessment })
     .eq("id", attemptId)
+    .select("question_id")
     .single();
-  await supabase.from("user_attempts").update({ self_assessment: assessment }).eq("id", attemptId);
-  if (attempt && (await claimSrsSlot(attemptId))) {
-    const quality = assessment === "correct" ? 1 : assessment === "partial" ? 0.5 : 0;
-    await applySrs(attempt.question_id, quality);
-  }
+  if (attempt) await syncReview(attempt.question_id);
 }
 
 export async function setErrorType(attemptId: number, errorType: ErrorType): Promise<void> {
@@ -93,7 +86,7 @@ export async function setErrorType(attemptId: number, errorType: ErrorType): Pro
  *  whose message is the server's own explanation (e.g. the daily-limit
  *  message), not a generic failure string — supabase-js doesn't surface
  *  the response body on a non-2xx by itself, so it has to be read here. */
-export async function gradeAttempt(attemptId: number): Promise<AiGrade> {
+export async function gradeAttempt(attemptId: number, questionId: number): Promise<AiGrade> {
   const { data, error } = await supabase.functions.invoke("grade-attempt", {
     body: { attempt_id: attemptId },
   });
@@ -110,5 +103,6 @@ export async function gradeAttempt(attemptId: number): Promise<AiGrade> {
     }
     throw serverMessage ? new Error(serverMessage) : error;
   }
+  await syncReview(questionId);
   return data.grade as AiGrade;
 }

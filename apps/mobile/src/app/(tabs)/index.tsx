@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl, Alert } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -6,6 +7,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { getDailyTasks } from "../../lib/daily";
 import { getAnalytics } from "../../lib/analytics";
 import { deleteAccount, logout } from "../../lib/account";
+import { PLACEMENT_QUESTIONS } from "../../lib/scoring";
+import { supabase } from "../../lib/supabase";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { Analytics, DailyItem } from "../../lib/types";
 
@@ -13,11 +16,27 @@ const EXAM_DATE = new Date("2027-02-01T00:00:00+08:00");
 const TOPIC_LABELS: Record<string, string> = { MIS: "管理資訊系統", DS: "資料結構", CS: "計算機概論" };
 
 const SLOT_META: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string; bg: string; line: string }> = {
+  placement: { label: "程度定位", icon: "compass-outline", color: colors.accent, bg: colors.accentSoft, line: "#C7D2FE" },
   review: { label: "到期複習", icon: "refresh-outline", color: "#92400E", bg: colors.warningSoft, line: colors.warningLine },
   weak: { label: "弱點加強", icon: "locate-outline", color: "#991B1B", bg: colors.dangerSoft, line: colors.dangerLine },
   unseen: { label: "新題", icon: "add-circle-outline", color: "#1E40AF", bg: colors.infoSoft, line: colors.infoLine },
   extra: { label: "加練", icon: "ellipsis-horizontal-circle-outline", color: colors.ink2, bg: "#F4F4F5", line: colors.line },
 };
+
+/** One-time reveal right after the 5th placement answer is scored. */
+async function announcePlacementOnce(percent: number) {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user.id;
+    if (!userId) return;
+    const key = `placement-announced:${userId}`;
+    if (await AsyncStorage.getItem(key)) return;
+    await AsyncStorage.setItem(key, "1");
+    Alert.alert("定位完成", `你的定位是「考前準備度：${percent}%」！\n繼續加油！`);
+  } catch {
+    // a missed announcement is harmless
+  }
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -25,10 +44,16 @@ export default function HomeScreen() {
   const [stats, setStats] = useState<Analytics | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  const announcing = useRef(false);
+
   const load = useCallback(async () => {
     const [d, a] = await Promise.all([getDailyTasks(), getAnalytics()]);
     setDaily(d);
     setStats(a);
+    if (a.readiness.percent !== null && !announcing.current) {
+      announcing.current = true;
+      announcePlacementOnce(a.readiness.percent);
+    }
   }, []);
 
   useFocusEffect(
@@ -65,13 +90,17 @@ export default function HomeScreen() {
   const doneCount = daily?.filter((d) => d.done_today).length ?? 0;
   const firstUndone = daily?.find((d) => !d.done_today);
 
-  const bySlot = { review: 0, weak: 0, unseen: 0 };
+  const bySlot = { placement: 0, review: 0, weak: 0, unseen: 0 };
   for (const d of daily ?? []) if (d.slot in bySlot) bySlot[d.slot as keyof typeof bySlot]++;
 
   const examTopics = (stats?.topicStats ?? []).filter((t) => t.topic === "CS" || t.topic === "DS");
-  const overallMastery = examTopics.length
-    ? examTopics.reduce((s, t) => s + (t.mastery ?? 0), 0) / examTopics.length
-    : null;
+  const readiness = stats?.readiness;
+  const placing = readiness ? readiness.percent === null : false;
+  const placedCount = Math.min(readiness?.scoredQuestions ?? 0, PLACEMENT_QUESTIONS);
+
+  const ctaText = placing
+    ? placedCount === 0 ? "開始定位 →" : `繼續定位（還差 ${PLACEMENT_QUESTIONS - placedCount} 題）→`
+    : doneCount === 0 ? "開始今天的練習 →" : `繼續練習（剩 ${(daily?.length ?? 0) - doneCount} 題）→`;
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -93,16 +122,20 @@ export default function HomeScreen() {
           <Text style={styles.heroLabel}>距筆試（約 2027/2）還有 {daysLeft} 天</Text>
           <View style={styles.heroRow}>
             <View style={styles.ring}>
-              <Text style={styles.ringText}>
-                {overallMastery != null ? `${Math.round(overallMastery * 100)}%` : "—"}
-              </Text>
+              {readiness?.percent != null ? (
+                <Text style={styles.ringText}>{readiness.percent}%</Text>
+              ) : (
+                <Text style={styles.ringTextSmall}>{readiness ? "未定位" : "—"}</Text>
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.heroSub}>考前準備度</Text>
               <Text style={styles.heroDesc}>
-                {stats?.totalAttempts
-                  ? `累積作答 ${stats.totalAttempts} 題，AI 批改 ${stats.aiGraded} 題。`
-                  : "開始作答後，這裡會顯示你的真實進度。"}
+                {!stats
+                  ? " "
+                  : placing
+                    ? `先作答 ${PLACEMENT_QUESTIONS} 題，我們會定位你的程度（已完成 ${placedCount}/${PLACEMENT_QUESTIONS}）。`
+                    : `累積作答 ${stats.totalAttempts} 題，AI 批改 ${stats.aiGraded} 題。`}
               </Text>
             </View>
           </View>
@@ -111,10 +144,12 @@ export default function HomeScreen() {
         <View style={styles.card}>
           <View>
             <Text style={styles.cardTitle}>今天練什麼</Text>
-            <Text style={styles.cardSub}>依到期複習 → 弱點 → 新題排序，不是隨機出題</Text>
+            <Text style={styles.cardSub}>
+              {placing ? "先用幾題選擇題定位你的程度" : "依到期複習 → 弱點 → 新題排序，不是隨機出題"}
+            </Text>
           </View>
 
-          {(["review", "weak", "unseen"] as const).map((slot) => {
+          {(["placement", "review", "weak", "unseen"] as const).map((slot) => {
             const meta = SLOT_META[slot];
             const count = bySlot[slot];
             if (!count) return null;
@@ -141,9 +176,7 @@ export default function HomeScreen() {
             <Text style={styles.loadingText}>載入中…</Text>
           ) : firstUndone ? (
             <Pressable style={styles.cta} onPress={() => router.push(`/question/${firstUndone.id}`)}>
-              <Text style={styles.ctaText}>
-                {doneCount === 0 ? "開始今天的練習 →" : `繼續練習（剩 ${daily.length - doneCount} 題）→`}
-              </Text>
+              <Text style={styles.ctaText}>{ctaText}</Text>
             </Pressable>
           ) : (
             <View style={styles.doneBanner}><Text style={styles.doneText}>今日任務完成！</Text></View>
@@ -185,6 +218,7 @@ const styles = StyleSheet.create({
   heroRow: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
   ring: { width: 64, height: 64, borderRadius: radius.full, borderWidth: 4, borderColor: "rgba(255,255,255,0.3)", alignItems: "center", justifyContent: "center" },
   ringText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  ringTextSmall: { color: "#fff", fontSize: 13, fontWeight: "800" },
   heroSub: { color: "rgba(255,255,255,0.75)", fontSize: 12, marginBottom: 3 },
   heroDesc: { color: "#fff", fontSize: 13, lineHeight: 19 },
   card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.md },

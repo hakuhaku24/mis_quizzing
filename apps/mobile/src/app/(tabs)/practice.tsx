@@ -9,6 +9,7 @@ import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { DailyItem } from "../../lib/types";
 
 const SLOT_META: Record<string, { label: string; color: string; bg: string }> = {
+  placement: { label: "定位", color: colors.accent, bg: colors.accentSoft },
   review: { label: "複習", color: "#D97706", bg: colors.warningSoft },
   weak: { label: "弱點", color: colors.danger, bg: colors.dangerSoft },
   unseen: { label: "新題", color: colors.info, bg: colors.infoSoft },

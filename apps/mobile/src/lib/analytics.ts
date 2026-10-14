@@ -1,10 +1,13 @@
 import { supabase } from "./supabase";
+import { latestScores, readiness } from "./scoring";
 import type { Analytics, TopicStat } from "./types";
 
 export async function getAnalytics(): Promise<Analytics> {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id;
-  if (!userId) return { totalAttempts: 0, aiGraded: 0, avgAiScore: null, topicStats: [], recentAttempts: [] };
+  if (!userId) {
+    return { totalAttempts: 0, aiGraded: 0, avgAiScore: null, topicStats: [], recentAttempts: [], readiness: readiness(new Map()) };
+  }
 
   const { data: attempts } = await supabase
     .from("user_attempts")
@@ -22,27 +25,25 @@ export async function getAnalytics(): Promise<Analytics> {
     ? aiScored.reduce((s, a) => s + (a.ai_score ?? 0), 0) / aiScored.length
     : null;
 
-  const byTopic = new Map<string, { total: number; qualities: number[]; aiScores: number[] }>();
+  const latest = latestScores(rows);
+
+  // mastery per subject = mean of each question's latest score (one vote per question)
+  const byTopic = new Map<string, { total: number; scores: number[]; aiScores: number[] }>();
   for (const a of rows) {
     const topic = topicById.get(a.question_id) ?? "其他";
-    const entry = byTopic.get(topic) ?? { total: 0, qualities: [], aiScores: [] };
+    const entry = byTopic.get(topic) ?? { total: 0, scores: [], aiScores: [] };
     entry.total += 1;
-    const quality =
-      a.is_correct !== null ? (a.is_correct ? 1 : 0)
-      : a.ai_score !== null ? a.ai_score / 10
-      : a.self_assessment === "correct" ? 1
-      : a.self_assessment === "partial" ? 0.5
-      : a.self_assessment === "wrong" ? 0
-      : null;
-    if (quality !== null) entry.qualities.push(quality);
     if (a.ai_score !== null) entry.aiScores.push(a.ai_score);
     byTopic.set(topic, entry);
+  }
+  for (const [questionId, score] of latest) {
+    byTopic.get(topicById.get(questionId) ?? "其他")?.scores.push(score);
   }
 
   const topicStats: TopicStat[] = [...byTopic.entries()].map(([topic, v]) => ({
     topic,
     total: v.total,
-    mastery: v.qualities.length ? v.qualities.reduce((s, x) => s + x, 0) / v.qualities.length : null,
+    mastery: v.scores.length ? v.scores.reduce((s, x) => s + x, 0) / v.scores.length : null,
     avg_ai_score: v.aiScores.length ? v.aiScores.reduce((s, x) => s + x, 0) / v.aiScores.length : null,
     ai_graded: v.aiScores.length,
   }));
@@ -53,6 +54,7 @@ export async function getAnalytics(): Promise<Analytics> {
     avgAiScore,
     topicStats,
     recentAttempts: rows.slice(0, 20).map((a) => ({ ai_score: a.ai_score, created_at: a.created_at })),
+    readiness: readiness(latest),
   };
 }
 

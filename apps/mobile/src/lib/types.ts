@@ -1,8 +1,10 @@
+import type { Readiness } from "./scoring";
+
 export type QuestionType = "essay" | "short_answer" | "multiple_choice" | "calculation";
 export type Confidence = "low" | "medium" | "high";
 export type SelfAssessment = "correct" | "partial" | "wrong";
 export type ErrorType = "concept" | "memory" | "careless" | "unseen";
-export type Slot = "weak" | "review" | "unseen" | "extra";
+export type Slot = "placement" | "weak" | "review" | "unseen" | "extra";
 
 export interface Question {
   id: number;
@@ -65,4 +67,5 @@ export interface Analytics {
   avgAiScore: number | null;
   topicStats: TopicStat[];
   recentAttempts: { ai_score: number | null; created_at: string }[];
+  readiness: Readiness;
 }
