@@ -5,8 +5,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getDailyTasks } from "../../lib/daily";
 import { getAnalytics } from "../../lib/analytics";
-import { supabase } from "../../lib/supabase";
-import { deleteAccount } from "../../lib/account";
+import { deleteAccount, logout } from "../../lib/account";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { Analytics, DailyItem } from "../../lib/types";
 
@@ -56,7 +55,7 @@ export default function HomeScreen() {
 
   const openAccountMenu = () =>
     Alert.alert("帳號", undefined, [
-      { text: "登出", onPress: () => supabase.auth.signOut() },
+      { text: "登出", onPress: () => logout() },
       { text: "刪除帳號", style: "destructive", onPress: confirmDelete },
       { text: "取消", style: "cancel" },
     ]);

@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import RichText from "../../components/RichText";
+import { loadDraft, saveDraft, clearDraft } from "../../lib/drafts";
 import { getQuestion, getAttempt, submitAttempt, setSelfAssessment, setErrorType, gradeAttempt } from "../../lib/attempts";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { AiGrade, Confidence, ErrorType, Question, SelfAssessment, Solution } from "../../lib/types";
@@ -46,10 +47,22 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
   const [gradeError, setGradeError] = useState<string | null>(null);
   const [startTime] = useState(() => Date.now());
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
 
   useEffect(() => {
-    Promise.all([getQuestion(id), savedAttemptId ? getAttempt(savedAttemptId) : Promise.resolve(null)])
-      .then(([{ question, solution }, saved]) => {
+    Promise.all([
+      getQuestion(id),
+      savedAttemptId ? getAttempt(savedAttemptId) : Promise.resolve(null),
+      savedAttemptId ? Promise.resolve(null) : loadDraft(id),
+    ])
+      .then(([{ question, solution }, saved, draft]) => {
+        if (draft) {
+          setAnswer(draft.answer);
+          setSelectedOption(draft.selectedOption);
+          setDraftRestored(true);
+        }
+        setDraftReady(!savedAttemptId);
         setQuestion(question);
         setSolution(solution);
         if (saved) {
@@ -67,6 +80,11 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
       })
       .finally(() => setLoading(false));
   }, [id, savedAttemptId]);
+
+  useEffect(() => {
+    // saved on every change (no debounce) so backing out right after typing loses nothing
+    if (draftReady && !submitted) saveDraft(id, { answer, selectedOption });
+  }, [id, answer, selectedOption, draftReady, submitted]);
 
   if (loading) {
     return (
@@ -108,6 +126,7 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
       });
       setAttemptId(newId);
       setSubmitted(true);
+      clearDraft(question.id);
     } catch {
       setGradeError("送出失敗，請稍後再試");
     }
@@ -171,6 +190,9 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
           </View>
 
           <View style={styles.card}>
+            {draftRestored && !submitted && (
+              <Text style={styles.draftHint}>已恢復上次未送出的草稿</Text>
+            )}
             {isMC ? (
               <View style={{ gap: spacing.sm }}>
                 {options.map((opt, i) => {
@@ -388,6 +410,7 @@ const styles = StyleSheet.create({
   gradeButtonText: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
   errorText: { color: colors.danger, fontSize: 12, marginTop: 4 },
   savedAt: { fontSize: 11.5, color: colors.ink3, paddingHorizontal: 2 },
+  draftHint: { fontSize: 11.5, color: colors.info, fontWeight: "600" },
   retryButton: { flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.accent, borderRadius: radius.md, paddingVertical: 12, backgroundColor: colors.surface },
   retryButtonText: { color: colors.accent, fontWeight: "700", fontSize: 14 },
   aiCard: { backgroundColor: colors.aiSoft, borderWidth: 1, borderColor: colors.aiLine, borderRadius: radius.md, padding: spacing.md, gap: spacing.md },
