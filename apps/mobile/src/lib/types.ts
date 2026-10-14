@@ -68,4 +68,6 @@ export interface Analytics {
   topicStats: TopicStat[];
   recentAttempts: { ai_score: number | null; created_at: string }[];
   readiness: Readiness;
+  /** All placed users' average readiness (0–100), null until enough users. */
+  readinessAverage: number | null;
 }

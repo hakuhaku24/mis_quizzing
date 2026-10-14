@@ -24,7 +24,7 @@ const SLOT_META: Record<string, { label: string; icon: keyof typeof Ionicons.gly
 };
 
 /** One-time reveal right after the 5th placement answer is scored. */
-async function announcePlacementOnce(percent: number) {
+async function announcePlacementOnce(percent: number, average: number | null) {
   try {
     const { data } = await supabase.auth.getSession();
     const userId = data.session?.user.id;
@@ -32,7 +32,8 @@ async function announcePlacementOnce(percent: number) {
     const key = `placement-announced:${userId}`;
     if (await AsyncStorage.getItem(key)) return;
     await AsyncStorage.setItem(key, "1");
-    Alert.alert("定位完成", `你的定位是「考前準備度：${percent}%」！\n繼續加油！`);
+    const averageLine = average !== null ? `\n目前所有使用者的平均是 ${average}%。` : "";
+    Alert.alert("定位完成", `你的定位是「考前準備度：${percent}%」！\n繼續加油！${averageLine}`);
   } catch {
     // a missed announcement is harmless
   }
@@ -52,7 +53,7 @@ export default function HomeScreen() {
     setStats(a);
     if (a.readiness.percent !== null && !announcing.current) {
       announcing.current = true;
-      announcePlacementOnce(a.readiness.percent);
+      announcePlacementOnce(a.readiness.percent, a.readinessAverage);
     }
   }, []);
 
@@ -137,6 +138,9 @@ export default function HomeScreen() {
                     ? `先作答 ${PLACEMENT_QUESTIONS} 題，我們會定位你的程度（已完成 ${placedCount}/${PLACEMENT_QUESTIONS}）。`
                     : `累積作答 ${stats.totalAttempts} 題，AI 批改 ${stats.aiGraded} 題。`}
               </Text>
+              {!placing && stats?.readinessAverage != null && (
+                <Text style={styles.heroAverage}>所有使用者平均 {stats.readinessAverage}%</Text>
+              )}
             </View>
           </View>
         </View>
@@ -221,6 +225,7 @@ const styles = StyleSheet.create({
   ringTextSmall: { color: "#fff", fontSize: 13, fontWeight: "800" },
   heroSub: { color: "rgba(255,255,255,0.75)", fontSize: 12, marginBottom: 3 },
   heroDesc: { color: "#fff", fontSize: 13, lineHeight: 19 },
+  heroAverage: { color: "rgba(255,255,255,0.75)", fontSize: 11.5, marginTop: 4 },
   card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.md },
   cardTitle: { ...typography.h2 },
   cardSub: { ...typography.tiny, color: colors.ink3, marginTop: 2 },

@@ -2,6 +2,8 @@
  * Single source of truth for how an answer is scored and how the
  * 考前準備度 (readiness) is derived. Design decided by the developer —
  * see CURRENT_STATUS.md §6.2.2 before changing anything here.
+ * The same rules are duplicated in SQL for the all-users average
+ * (supabase/migrations/004_readiness_average.sql): change both together.
  */
 
 export const PLACEMENT_QUESTIONS = 5;

@@ -6,16 +6,22 @@ export async function getAnalytics(): Promise<Analytics> {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id;
   if (!userId) {
-    return { totalAttempts: 0, aiGraded: 0, avgAiScore: null, topicStats: [], recentAttempts: [], readiness: readiness(new Map()) };
+    return {
+      totalAttempts: 0, aiGraded: 0, avgAiScore: null, topicStats: [], recentAttempts: [],
+      readiness: readiness(new Map()), readinessAverage: null,
+    };
   }
 
-  const { data: attempts } = await supabase
-    .from("user_attempts")
-    .select("question_id, is_correct, ai_score, self_assessment, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-
-  const { data: questions } = await supabase.from("questions").select("id, topic");
+  const [{ data: attempts }, { data: questions }, { data: average }] = await Promise.all([
+    supabase
+      .from("user_attempts")
+      .select("question_id, is_correct, ai_score, self_assessment, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
+    supabase.from("questions").select("id, topic"),
+    // null until enough users are placed (see migration 004)
+    supabase.rpc("readiness_average"),
+  ]);
   const topicById = new Map((questions ?? []).map((q) => [q.id, q.topic]));
 
   const rows = attempts ?? [];
@@ -55,6 +61,7 @@ export async function getAnalytics(): Promise<Analytics> {
     topicStats,
     recentAttempts: rows.slice(0, 20).map((a) => ({ ai_score: a.ai_score, created_at: a.created_at })),
     readiness: readiness(latest),
+    readinessAverage: typeof average === "number" ? average : null,
   };
 }
 
