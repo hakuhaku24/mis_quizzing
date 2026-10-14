@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWriteDb } from "@/lib/db";
+import { applySrs, claimSrsSlot } from "@/lib/srs";
 
 export async function POST(
   req: NextRequest,
@@ -57,6 +58,12 @@ export async function POST(
         last_attempt_at = datetime('now'),
         updated_at = datetime('now')
     `).run(id);
+  }
+
+  // MC correctness is known immediately — feed the scheduler now. Essay/short-answer
+  // attempts stay unscored here and get picked up by AI grading or self-assessment.
+  if (is_correct === 1 || is_correct === 0) {
+    if (claimSrsSlot(db, attemptId)) applySrs(db, Number(id), is_correct);
   }
 
   db.close();

@@ -1,0 +1,187 @@
+import { useCallback, useState } from "react";
+import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { getDailyTasks } from "../../lib/daily";
+import { getAnalytics } from "../../lib/analytics";
+import { supabase } from "../../lib/supabase";
+import { colors, radius, spacing, typography } from "../../lib/theme";
+import type { Analytics, DailyItem } from "../../lib/types";
+
+const EXAM_DATE = new Date("2027-02-01T00:00:00+08:00");
+const TOPIC_LABELS: Record<string, string> = { MIS: "管理資訊系統", DS: "資料結構", CS: "計算機概論" };
+
+const SLOT_META: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string; bg: string; line: string }> = {
+  review: { label: "到期複習", icon: "refresh-outline", color: "#92400E", bg: colors.warningSoft, line: colors.warningLine },
+  weak: { label: "弱點加強", icon: "locate-outline", color: "#991B1B", bg: colors.dangerSoft, line: colors.dangerLine },
+  unseen: { label: "新題", icon: "add-circle-outline", color: "#1E40AF", bg: colors.infoSoft, line: colors.infoLine },
+  extra: { label: "加練", icon: "ellipsis-horizontal-circle-outline", color: colors.ink2, bg: "#F4F4F5", line: colors.line },
+};
+
+export default function HomeScreen() {
+  const router = useRouter();
+  const [daily, setDaily] = useState<DailyItem[] | null>(null);
+  const [stats, setStats] = useState<Analytics | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    const [d, a] = await Promise.all([getDailyTasks(), getAnalytics()]);
+    setDaily(d);
+    setStats(a);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
+
+  const [now] = useState(() => Date.now());
+  const daysLeft = Math.max(0, Math.ceil((EXAM_DATE.getTime() - now) / 86_400_000));
+  const doneCount = daily?.filter((d) => d.done_today).length ?? 0;
+  const firstUndone = daily?.find((d) => !d.done_today);
+
+  const bySlot = { review: 0, weak: 0, unseen: 0 };
+  for (const d of daily ?? []) if (d.slot in bySlot) bySlot[d.slot as keyof typeof bySlot]++;
+
+  const examTopics = (stats?.topicStats ?? []).filter((t) => t.topic === "CS" || t.topic === "DS");
+  const overallMastery = examTopics.length
+    ? examTopics.reduce((s, t) => s + (t.mastery ?? 0), 0) / examTopics.length
+    : null;
+
+  return (
+    <SafeAreaView style={styles.root} edges={["top"]}>
+      <View style={styles.topBar}>
+        <View style={styles.brandRow}>
+          <View style={styles.logo}><Text style={styles.logoText}>研</Text></View>
+          <Text style={styles.brandText}>考研教練</Text>
+        </View>
+        <Pressable style={styles.iconButton} onPress={() => supabase.auth.signOut()}>
+          <Ionicons name="log-out-outline" size={18} color={colors.ink2} />
+        </Pressable>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <View style={styles.hero}>
+          <Text style={styles.heroLabel}>距筆試（約 2027/2）還有 {daysLeft} 天</Text>
+          <View style={styles.heroRow}>
+            <View style={styles.ring}>
+              <Text style={styles.ringText}>
+                {overallMastery != null ? `${Math.round(overallMastery * 100)}%` : "—"}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroSub}>考前準備度</Text>
+              <Text style={styles.heroDesc}>
+                {stats?.totalAttempts
+                  ? `累積作答 ${stats.totalAttempts} 題，AI 批改 ${stats.aiGraded} 題。`
+                  : "開始作答後，這裡會顯示你的真實進度。"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <View>
+            <Text style={styles.cardTitle}>今天練什麼</Text>
+            <Text style={styles.cardSub}>依到期複習 → 弱點 → 新題排序，不是隨機出題</Text>
+          </View>
+
+          {(["review", "weak", "unseen"] as const).map((slot) => {
+            const meta = SLOT_META[slot];
+            const count = bySlot[slot];
+            if (!count) return null;
+            return (
+              <Pressable
+                key={slot}
+                style={[styles.slotRow, { backgroundColor: meta.bg, borderColor: meta.line }]}
+                onPress={() => {
+                  const item = daily?.find((d) => d.slot === slot && !d.done_today);
+                  if (item) router.push(`/question/${item.id}`);
+                }}
+              >
+                <View style={[styles.slotIcon, { backgroundColor: "#fff" }]}>
+                  <Ionicons name={meta.icon} size={15} color={meta.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.slotLabel, { color: meta.color }]}>{meta.label} · {count} 題</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+
+          {daily === null ? (
+            <Text style={styles.loadingText}>載入中…</Text>
+          ) : firstUndone ? (
+            <Pressable style={styles.cta} onPress={() => router.push(`/question/${firstUndone.id}`)}>
+              <Text style={styles.ctaText}>
+                {doneCount === 0 ? "開始今天的練習 →" : `繼續練習（剩 ${daily.length - doneCount} 題）→`}
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={styles.doneBanner}><Text style={styles.doneText}>今日任務完成！</Text></View>
+          )}
+        </View>
+
+        {examTopics.length > 0 && (
+          <Pressable style={styles.masteryRow} onPress={() => router.push("/(tabs)/analytics")}>
+            <View>
+              <Text style={styles.masteryText}>
+                {examTopics
+                  .slice()
+                  .sort((a, b) => (a.mastery ?? 0) - (b.mastery ?? 0))
+                  .slice(0, 2)
+                  .map((t) => `${TOPIC_LABELS[t.topic] ?? t.topic} ${Math.round((t.mastery ?? 0) * 100)}%`)
+                  .join(" · ")}
+              </Text>
+              <Text style={styles.masterySub}>看完整弱點分析</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.ink3} />
+          </Pressable>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.ground },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, height: 56 },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  logo: { width: 26, height: 26, borderRadius: 8, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
+  logoText: { color: "#fff", fontSize: 13, fontWeight: "800" },
+  brandText: { ...typography.h2 },
+  iconButton: { width: 34, height: 34, borderRadius: radius.full, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  content: { padding: spacing.xl, paddingTop: spacing.xs, gap: spacing.lg, paddingBottom: spacing.xxl },
+  hero: { backgroundColor: colors.accent, borderRadius: radius.xxl, padding: spacing.xl, gap: spacing.lg },
+  heroLabel: { color: "rgba(255,255,255,0.75)", fontSize: 12 },
+  heroRow: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
+  ring: { width: 64, height: 64, borderRadius: radius.full, borderWidth: 4, borderColor: "rgba(255,255,255,0.3)", alignItems: "center", justifyContent: "center" },
+  ringText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  heroSub: { color: "rgba(255,255,255,0.75)", fontSize: 12, marginBottom: 3 },
+  heroDesc: { color: "#fff", fontSize: 13, lineHeight: 19 },
+  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.md },
+  cardTitle: { ...typography.h2 },
+  cardSub: { ...typography.tiny, color: colors.ink3, marginTop: 2 },
+  slotRow: { flexDirection: "row", alignItems: "center", gap: 11, padding: 11, borderRadius: radius.md, borderWidth: 1 },
+  slotIcon: { width: 30, height: 30, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
+  slotLabel: { fontSize: 13.5, fontWeight: "700" },
+  loadingText: { textAlign: "center", color: colors.ink3, paddingVertical: spacing.xl },
+  cta: { backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: 13, alignItems: "center", marginTop: spacing.xs },
+  ctaText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  doneBanner: { backgroundColor: colors.successSoft, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center" },
+  doneText: { color: colors.success, fontWeight: "700", fontSize: 14 },
+  masteryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: spacing.lg },
+  masteryText: { fontSize: 12.5, fontWeight: "700", color: colors.ink },
+  masterySub: { fontSize: 11, color: colors.ink3, marginTop: 2 },
+});

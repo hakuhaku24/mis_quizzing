@@ -1,0 +1,84 @@
+import { useCallback, useState } from "react";
+import { View, Text, FlatList, Pressable, StyleSheet, RefreshControl } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { getHistory, type HistoryRow } from "../../lib/analytics";
+import { stripMarkup } from "../../lib/text";
+import { colors, radius, spacing, typography } from "../../lib/theme";
+
+const FILTERS = ["全部", "MIS", "DS", "CS"];
+
+export default function HistoryScreen() {
+  const router = useRouter();
+  const [rows, setRows] = useState<HistoryRow[] | null>(null);
+  const [filter, setFilter] = useState("全部");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => setRows(await getHistory()), []);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const visible = (rows ?? []).filter((r) => filter === "全部" || r.topic === filter);
+
+  return (
+    <SafeAreaView style={styles.root} edges={["top"]}>
+      <Text style={styles.title}>答題紀錄</Text>
+      <View style={styles.filterRow}>
+        {FILTERS.map((f) => (
+          <Pressable key={f} onPress={() => setFilter(f)} style={[styles.filterChip, filter === f && styles.filterChipActive]}>
+            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>{f}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <FlatList
+        data={visible}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
+        ListEmptyComponent={<Text style={styles.empty}>{rows === null ? "載入中…" : "還沒有紀錄"}</Text>}
+        renderItem={({ item }) => {
+          const badge = badgeFor(item);
+          return (
+            <Pressable style={styles.row} onPress={() => router.push(`/question/${item.question_id}`)}>
+              <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                <Text style={[styles.badgeText, { color: badge.color }]}>{badge.text}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowText} numberOfLines={1}>{stripMarkup(item.question_text)}</Text>
+                <Text style={styles.rowSub}>{new Date(item.created_at).toLocaleDateString("zh-TW")}</Text>
+              </View>
+            </Pressable>
+          );
+        }}
+      />
+    </SafeAreaView>
+  );
+}
+
+function badgeFor(item: HistoryRow): { bg: string; color: string; text: string } {
+  if (item.is_correct === true) return { bg: colors.successSoft, color: colors.success, text: "✓" };
+  if (item.is_correct === false) return { bg: colors.dangerSoft, color: colors.danger, text: "✕" };
+  if (item.ai_score != null) {
+    const v = item.ai_score;
+    if (v >= 7) return { bg: colors.successSoft, color: colors.success, text: String(v) };
+    if (v >= 4) return { bg: colors.warningSoft, color: colors.warning, text: String(v) };
+    return { bg: colors.dangerSoft, color: colors.danger, text: String(v) };
+  }
+  return { bg: "#F4F4F5", color: colors.ink3, text: "—" };
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.ground },
+  title: { ...typography.h1, paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
+  filterRow: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.full, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  filterChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  filterText: { fontSize: 12, fontWeight: "600", color: colors.ink2 },
+  filterTextActive: { color: "#fff", fontWeight: "700" },
+  list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl, gap: spacing.sm },
+  empty: { textAlign: "center", color: colors.ink3, paddingVertical: spacing.xxl },
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.md },
+  badge: { width: 34, height: 34, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
+  badgeText: { fontSize: 14, fontWeight: "800" },
+  rowText: { fontSize: 13, fontWeight: "600", color: colors.ink },
+  rowSub: { fontSize: 11, color: colors.ink3, marginTop: 2 },
+});

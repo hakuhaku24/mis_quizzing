@@ -7,7 +7,10 @@ For every NCU question without a solution:
 - multiple_choice → correct option + per-option analysis; questions.correct_option
   is filled so the app can auto-judge (clearly labelled as AI draft in the UI)
 
-Model: gpt-oss-120b (strongest reasoner available on this Groq account).
+Model: Gemini 2.5 Flash-Lite. Deliberately a different model from the OCR job
+(gemini-2.5-flash) so the two background jobs don't fight over the same daily
+quota bucket — and separate from Groq entirely, which this job used to run on
+until its gpt-oss-120b daily token quota (200k/day) got exhausted.
 Everything is stored with source_type/verified_status = 'ai_draft'.
 Idempotent + resumable: questions that already have a solution are skipped.
 
@@ -25,7 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DB = ROOT / "data" / "questions.db"
-MODEL = "openai/gpt-oss-120b"
+MODEL = "gemini-3.5-flash-lite"
 
 ESSAY_SYSTEM = """你是台灣資管所研究所入學考試的解題老師。為考題撰寫參考詳解，繁體中文（專有名詞保留英文），只輸出 JSON（無 markdown 圍欄）：
 {"solution_text": "完整參考答案：依題目要求逐點作答，每個得分點一行、開頭用「・」。要具體到考場上照抄可拿滿分的程度：該畫圖的用文字描述圖的結構，該寫程式的寫出完整程式碼，該計算的列出計算過程與最終答案。",
@@ -39,36 +42,118 @@ MC_SYSTEM = """你是台灣資管所研究所入學考試的解題老師。判�
 不確定時仍要選出最可能的答案並把 confidence 設為 low。"""
 
 
+def repair_json(text: str) -> dict:
+    """Gemini's JSON mode isn't always strict — despite responseMimeType
+    being set to application/json, it sometimes still wraps the object in a
+    ```json fence, or leaves raw control characters / lone backslashes
+    (e.g. literal "\\frac") inside string values that break json.loads.
+    Try a straight parse first; only repair on failure.
+
+    The repair walks the text tracking whether we're inside a string literal
+    — whitespace *between* fields (e.g. the newline after a field's closing
+    comma) is valid JSON as-is and must be left alone; only raw control
+    characters and stray backslashes *inside* a string value are illegal and
+    need escaping. An earlier version escaped newlines everywhere, which
+    broke the separator between fields."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    stripped = text.strip()
+    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", stripped, re.S)
+    if fence:
+        stripped = fence.group(1)
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        pass
+
+    out = []
+    in_string = False
+    i, n = 0, len(stripped)
+    while i < n:
+        ch = stripped[i]
+        if in_string:
+            if ch == "\\" and i + 1 < n and stripped[i + 1] in '"\\/bfnrtu':
+                out.append(ch)
+                out.append(stripped[i + 1])
+                i += 2
+                continue
+            if ch == "\\":
+                out.append("\\\\")  # lone backslash, not a valid escape
+                i += 1
+                continue
+            if ch == '"':
+                in_string = False
+                out.append(ch)
+                i += 1
+                continue
+            if ch in "\n\r\t":
+                out.append({"\n": "\\n", "\r": "\\r", "\t": "\\t"}[ch])
+                i += 1
+                continue
+            if ord(ch) < 0x20:
+                i += 1  # drop other illegal raw control chars
+                continue
+            out.append(ch)
+            i += 1
+        else:
+            if ch == '"':
+                in_string = True
+            out.append(ch)
+            i += 1
+    return json.loads("".join(out))
+
+
 def api_key() -> str:
     env = ROOT / "apps" / "web" / ".env.local"
     for line in env.read_text(encoding="utf-8").splitlines():
-        if line.startswith("GROQ_API_KEY="):
+        if line.startswith("GEMINI_API_KEY="):
             return line.split("=", 1)[1].strip()
-    raise SystemExit("GROQ_API_KEY not found")
+    raise SystemExit("GEMINI_API_KEY not found")
 
 
 def llm(key: str, system: str, user: str) -> dict:
-    body = {
-        "model": MODEL,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        "response_format": {"type": "json_object"},
-        "temperature": 0.2,
-        "max_tokens": 4000,
-        "reasoning_effort": "high",
-    }
-    req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
-        data=json.dumps(body).encode(),
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
-                 "User-Agent": "mis-grad-exam-coach/1.0"},
-    )
+    # Algorithm-heavy questions (recursive implementations, DFS, heap
+    # construction, Java tracing...) need more completion budget than a quick
+    # answer — start generous and bump it once if the model gets cut off
+    # mid-JSON (finishReason MAX_TOKENS) instead of failing outright.
+    max_tokens = 8000
+
+    def build_req():
+        body = {
+            "system_instruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": user}]}],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": max_tokens,
+                "responseMimeType": "application/json",
+            },
+        }
+        return urllib.request.Request(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={key}",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json", "User-Agent": "mis-grad-exam-coach/1.0"},
+        )
+
+    truncation_retried = False
     for attempt in range(8):
         try:
-            with urllib.request.urlopen(req, timeout=180) as r:
+            with urllib.request.urlopen(build_req(), timeout=180) as r:
                 data = json.load(r)
-            return json.loads(data["choices"][0]["message"]["content"])
+            candidate = data["candidates"][0]
+            if "content" not in candidate:
+                reason = candidate.get("finishReason", "unknown")
+                if reason == "MAX_TOKENS" and not truncation_retried:
+                    truncation_retried = True
+                    max_tokens = 16000
+                    print("    truncated before valid JSON, retrying with maxOutputTokens=16000", flush=True)
+                    continue
+                raise RuntimeError(f"blocked ({reason})")
+            text = candidate["content"]["parts"][0]["text"]
+            return repair_json(text)
         except urllib.error.HTTPError as e:
-            if e.code in (413, 429, 500, 502, 503):
+            if e.code in (429, 500, 502, 503):
                 wait = min(int(e.headers.get("retry-after") or 2 ** (attempt + 2)) + 5, 900)
                 print(f"    HTTP {e.code}, retry in {wait}s", flush=True)
                 time.sleep(wait)
@@ -77,6 +162,7 @@ def llm(key: str, system: str, user: str) -> dict:
         except (urllib.error.URLError, OSError, TimeoutError) as e:
             print(f"    network error ({e}), retry in {2 ** (attempt + 2)}s", flush=True)
             time.sleep(2 ** (attempt + 2))
+    raise RuntimeError("llm failed after retries")
     raise RuntimeError("llm failed after retries")
 
 

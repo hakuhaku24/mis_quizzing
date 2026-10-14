@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "考研教練",
+    "slug": "mis-grad-coach",
+    "scheme": "misgradcoach",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jerrywang65.misgradcoach"
+    },
+    "android": {
+      "package": "com.jerrywang65.misgradcoach",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-font"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5bea1204-2e40-4ac1-a6db-4277d3016fde"
+      }
+    },
+    "owner": "jerrywang65",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/5bea1204-2e40-4ac1-a6db-4277d3016fde"
+    }
+  }
+}

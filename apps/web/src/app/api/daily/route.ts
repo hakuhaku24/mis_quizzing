@@ -74,16 +74,31 @@ export async function GET() {
       `, [...DAILY_TOPICS, ...weakConcepts], SLOTS.weak, used);
     }
 
-    // 2) review: answered badly before, least recently attempted first
-    const review = pick(`
+    // 2) review: due per the spaced-repetition schedule (most overdue first).
+    // Falls back to "answered badly before" for questions attempted before this
+    // scheduler existed (no next_review_at yet).
+    let review = pick(`
       SELECT q.id FROM questions q
-      JOIN (
-        SELECT a.question_id, MAX(a.created_at) AS last_at, AVG(${MASTERY_CASE}) AS m
-        FROM user_attempts a GROUP BY a.question_id
-      ) s ON s.question_id = q.id
-      WHERE q.topic IN (${topicsIn}) AND s.m IS NOT NULL AND s.m < 0.7
-      ORDER BY s.last_at ASC
+      JOIN user_question_states s ON s.question_id = q.id
+      WHERE q.topic IN (${topicsIn}) AND s.next_review_at IS NOT NULL
+        AND s.next_review_at <= datetime('now')
+      ORDER BY s.next_review_at ASC
     `, DAILY_TOPICS, SLOTS.review, used);
+
+    if (review.length < SLOTS.review) {
+      const fallback = pick(`
+        SELECT q.id FROM questions q
+        JOIN (
+          SELECT a.question_id, MAX(a.created_at) AS last_at, AVG(${MASTERY_CASE}) AS m
+          FROM user_attempts a GROUP BY a.question_id
+        ) s ON s.question_id = q.id
+        LEFT JOIN user_question_states st ON st.question_id = q.id
+        WHERE q.topic IN (${topicsIn}) AND s.m IS NOT NULL AND s.m < 0.7
+          AND st.next_review_at IS NULL
+        ORDER BY s.last_at ASC
+      `, DAILY_TOPICS, SLOTS.review - review.length, used);
+      review = review.concat(fallback);
+    }
 
     // 3) unseen
     const pickUnseen = (n: number) => pick(`

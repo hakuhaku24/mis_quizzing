@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Transcribe scanned real-exam PDFs with a vision LLM (Groq llama-4-scout).
+"""Transcribe scanned real-exam PDFs with a vision LLM (Gemini 2.5 Flash).
 
 Input : data/downloads/{ncu_central,nsysu}/*.pdf  (scanned images)
 Output: data/ocr/{source}/{pdf-stem}/page_{nn}.txt (verbatim transcription)
@@ -17,6 +17,7 @@ import base64
 import json
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -24,12 +25,13 @@ import fitz  # pymupdf
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = ["ncu_central", "nsysu"]
-# llama-4-scout vanished from the account mid-run (Groq rotates preview models);
-# qwen3.6-27b takes images too and transcribes at the same quality.
-MODEL = "qwen/qwen3.6-27b"
-# x1.4 keeps the TPM estimate for one request under qwen's 8000/min free tier
+# Switched off Groq: qwen3.6-27b and llama-4-scout both got pulled mid-run
+# (Groq rotates preview/free models). gemini-2.5-flash's free tier turned out
+# to be 20 requests/DAY (not per-minute) and got exhausted fast — moved to
+# gemini-3.5-flash, a fresh quota bucket with the same quality.
+MODEL = "gemini-3.5-flash"
 RENDER_SCALE = 1.4
-PAGE_SLEEP = 25
+PAGE_SLEEP = 7
 
 PROMPT = (
     "這是台灣研究所入學考試考卷的掃描頁。請逐字轉錄頁面上的所有文字，繁體中文與英文照原文抄錄，"
@@ -42,47 +44,51 @@ PROMPT = (
 def api_key() -> str:
     env = ROOT / "apps" / "web" / ".env.local"
     for line in env.read_text(encoding="utf-8").splitlines():
-        if line.startswith("GROQ_API_KEY="):
+        if line.startswith("GEMINI_API_KEY="):
             return line.split("=", 1)[1].strip()
-    raise SystemExit("GROQ_API_KEY not found in apps/web/.env.local")
+    raise SystemExit("GEMINI_API_KEY not found in apps/web/.env.local")
+
+
+class BlockedPage(Exception):
+    """Gemini declined the page (RECITATION/SAFETY) after all retries."""
 
 
 def transcribe_page(key: str, img: bytes) -> str:
-    body = {
-        "model": MODEL,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": PROMPT},
-                {"type": "image_url", "image_url": {
-                    "url": "data:image/jpeg;base64," + base64.b64encode(img).decode()
-                }},
-            ],
-        }],
-        "temperature": 0,
-        "max_tokens": 3500,          # counted into the TPM estimate — keep tight
-        "reasoning_effort": "none",  # transcription needs no thinking tokens
-    }
-    req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
-        data=json.dumps(body).encode(),
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-            "User-Agent": "mis-grad-exam-coach/1.0",
-        },
-    )
+    recitation_retries = 0
     for attempt in range(10):
+        # RECITATION triggers at temperature 0 when the page text closely
+        # matches something in training data; nudging temperature up usually
+        # gets past it without hurting verbatim transcription quality.
+        temperature = min(0.4, recitation_retries * 0.2)
+        body = {
+            "contents": [{
+                "parts": [
+                    {"text": PROMPT},
+                    {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(img).decode()}},
+                ],
+            }],
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": 3500},
+        }
+        req = urllib.request.Request(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={key}",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json", "User-Agent": "mis-grad-exam-coach/1.0"},
+        )
         try:
             with urllib.request.urlopen(req, timeout=120) as r:
                 data = json.load(r)
-            return data["choices"][0]["message"]["content"]
+            candidate = data["candidates"][0]
+            if "content" not in candidate:
+                reason = candidate.get("finishReason", "unknown")
+                recitation_retries += 1
+                if recitation_retries >= 3:
+                    raise BlockedPage(reason)
+                print(f"    blocked ({reason}), retry with temperature={temperature + 0.2}", flush=True)
+                continue
+            return candidate["content"]["parts"][0]["text"]
         except urllib.error.HTTPError as e:
-            if e.code in (413, 429, 500, 502, 503):
-                # 413 here is Groq's TPM estimator, not actual payload size —
-                # wait for the minute window like a 429
-                wait = int(e.headers.get("retry-after") or 2 ** (attempt + 2))
-                wait = min(max(wait + 5, 65 if e.code == 413 else 0), 900)
+            if e.code in (429, 500, 502, 503):
+                wait = min(int(e.headers.get("retry-after") or 2 ** (attempt + 2)) + 5, 900)
                 print(f"    HTTP {e.code}, retry in {wait}s", flush=True)
                 time.sleep(wait)
                 continue
@@ -122,10 +128,15 @@ def main() -> None:
             print(f"{source}/{pdf.name}: {len(missing)}/{len(doc)} pages to do", flush=True)
             for i in missing:
                 img = doc[i].get_pixmap(matrix=fitz.Matrix(RENDER_SCALE, RENDER_SCALE)).tobytes("jpeg")
-                text = transcribe_page(key, img)
+                try:
+                    text = transcribe_page(key, img)
+                except BlockedPage as e:
+                    print(f"    page {i+1}/{len(doc)} BLOCKED ({e}), skipped", flush=True)
+                    time.sleep(PAGE_SLEEP)
+                    continue
                 (outdir / f"page_{i+1:02d}.txt").write_text(text, encoding="utf-8")
                 print(f"    page {i+1}/{len(doc)} ok ({len(text)} chars)", flush=True)
-                time.sleep(PAGE_SLEEP)  # pace under the 8000 TPM free tier
+                time.sleep(PAGE_SLEEP)
             doc.close()
             done_pdfs += 1
     print("done")

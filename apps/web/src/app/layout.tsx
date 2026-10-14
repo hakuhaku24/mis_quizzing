@@ -24,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/questions" className="hover:text-blue-600 transition-colors">題庫</Link>
               <Link href="/analytics" className="hover:text-blue-600 transition-colors">弱點分析</Link>
               <Link href="/history" className="hover:text-blue-600 transition-colors">答題記錄</Link>
+              <Link href="/info" className="hover:text-blue-600 transition-colors">考情資訊</Link>
             </nav>
           </div>
         </header>

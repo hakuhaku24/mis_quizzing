@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWriteDb } from "@/lib/db";
+import { applySrs, claimSrsSlot } from "@/lib/srs";
 import type { AiGrade } from "@/lib/types";
 
 const GRADER_SYSTEM = `你是台灣資管所研究所入學考試的閱卷老師。根據題目與參考詳解，批改考生的申論答案。
@@ -52,7 +53,7 @@ export async function POST(
   try {
     const row = db
       .prepare(
-        `SELECT a.answer_text, a.ai_feedback, q.question_text, q.question_type,
+        `SELECT a.question_id, a.answer_text, a.ai_feedback, q.question_text, q.question_type,
                 s.solution_text, s.explanation
          FROM user_attempts a
          JOIN questions q ON q.id = a.question_id
@@ -61,6 +62,7 @@ export async function POST(
       )
       .get(id) as
       | {
+          question_id: number;
           answer_text: string | null;
           ai_feedback: string | null;
           question_text: string;
@@ -239,6 +241,8 @@ export async function POST(
       JSON.stringify(grade),
       id
     );
+
+    if (claimSrsSlot(db, id)) applySrs(db, row.question_id, score / 10);
 
     return NextResponse.json({ grade, cached: false });
   } finally {

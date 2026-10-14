@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWriteDb } from "@/lib/db";
+import { applySrs, claimSrsSlot } from "@/lib/srs";
 
 export async function PATCH(
   req: NextRequest,
@@ -37,6 +38,10 @@ export async function PATCH(
 
   if (attempt) {
     const qid = attempt.question_id;
+    if (claimSrsSlot(db, id)) {
+      const quality = self_assessment === "correct" ? 1 : self_assessment === "partial" ? 0.5 : 0;
+      applySrs(db, qid, quality);
+    }
     if (self_assessment === "correct") {
       db.prepare(`
         INSERT INTO user_question_states (question_id, status, last_attempt_at, correct_count, mastery_score)
