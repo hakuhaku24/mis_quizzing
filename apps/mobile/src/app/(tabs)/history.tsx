@@ -1,34 +1,40 @@
 import { useCallback, useState } from "react";
-import { View, Text, FlatList, Pressable, StyleSheet, RefreshControl } from "react-native";
+import { View, Text, FlatList, Pressable, StyleSheet, RefreshControl, ScrollView } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getHistory, type HistoryRow } from "../../lib/analytics";
 import { stripMarkup } from "../../lib/text";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 
-const FILTERS = ["全部", "MIS", "DS", "CS"];
+const FILTERS: { label: string; topic: string | null }[] = [
+  { label: "全部", topic: null },
+  { label: "計算機概論", topic: "CS" },
+  { label: "資料結構", topic: "DS" },
+  { label: "管理資訊系統", topic: "MIS" },
+];
+const ERROR_TYPE_LABELS: Record<string, string> = { concept: "觀念不懂", memory: "記憶模糊", careless: "粗心", unseen: "沒看過" };
 
 export default function HistoryScreen() {
   const router = useRouter();
   const [rows, setRows] = useState<HistoryRow[] | null>(null);
-  const [filter, setFilter] = useState("全部");
+  const [filter, setFilter] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => setRows(await getHistory()), []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const visible = (rows ?? []).filter((r) => filter === "全部" || r.topic === filter);
+  const visible = (rows ?? []).filter((r) => filter === null || r.topic === filter);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <Text style={styles.title}>答題紀錄</Text>
-      <View style={styles.filterRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={styles.filterRow}>
         {FILTERS.map((f) => (
-          <Pressable key={f} onPress={() => setFilter(f)} style={[styles.filterChip, filter === f && styles.filterChipActive]}>
-            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>{f}</Text>
+          <Pressable key={f.label} onPress={() => setFilter(f.topic)} style={[styles.filterChip, filter === f.topic && styles.filterChipActive]}>
+            <Text style={[styles.filterText, filter === f.topic && styles.filterTextActive]}>{f.label}</Text>
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
       <FlatList
         data={visible}
         keyExtractor={(item) => String(item.id)}
@@ -44,7 +50,14 @@ export default function HistoryScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowText} numberOfLines={1}>{stripMarkup(item.question_text)}</Text>
-                <Text style={styles.rowSub}>{new Date(item.created_at).toLocaleDateString("zh-TW")}</Text>
+                <View style={styles.subRow}>
+                  <Text style={styles.rowSub}>{new Date(item.created_at).toLocaleDateString("zh-TW")}</Text>
+                  {item.error_type && ERROR_TYPE_LABELS[item.error_type] && (
+                    <View style={styles.errorChip}>
+                      <Text style={styles.errorChipText}>{ERROR_TYPE_LABELS[item.error_type]}</Text>
+                    </View>
+                  )}
+                </View>
               </View>
             </Pressable>
           );
@@ -59,10 +72,14 @@ function badgeFor(item: HistoryRow): { bg: string; color: string; text: string }
   if (item.is_correct === false) return { bg: colors.dangerSoft, color: colors.danger, text: "✕" };
   if (item.ai_score != null) {
     const v = item.ai_score;
-    if (v >= 7) return { bg: colors.successSoft, color: colors.success, text: String(v) };
-    if (v >= 4) return { bg: colors.warningSoft, color: colors.warning, text: String(v) };
-    return { bg: colors.dangerSoft, color: colors.danger, text: String(v) };
+    const text = `${v}/10`;
+    if (v >= 7) return { bg: colors.successSoft, color: colors.success, text };
+    if (v >= 4) return { bg: colors.warningSoft, color: colors.warning, text };
+    return { bg: colors.dangerSoft, color: colors.danger, text };
   }
+  if (item.self_assessment === "correct") return { bg: colors.successSoft, color: colors.success, text: "✓" };
+  if (item.self_assessment === "partial") return { bg: colors.warningSoft, color: colors.warning, text: "△" };
+  if (item.self_assessment === "wrong") return { bg: colors.dangerSoft, color: colors.danger, text: "✕" };
   return { bg: "#F4F4F5", color: colors.ink3, text: "—" };
 }
 
@@ -77,8 +94,11 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl, gap: spacing.sm },
   empty: { textAlign: "center", color: colors.ink3, paddingVertical: spacing.xxl },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.md },
-  badge: { width: 34, height: 34, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
-  badgeText: { fontSize: 14, fontWeight: "800" },
+  badge: { minWidth: 44, height: 34, paddingHorizontal: 6, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
+  badgeText: { fontSize: 12.5, fontWeight: "800" },
   rowText: { fontSize: 13, fontWeight: "600", color: colors.ink },
-  rowSub: { fontSize: 11, color: colors.ink3, marginTop: 2 },
+  subRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 2 },
+  rowSub: { fontSize: 11, color: colors.ink3 },
+  errorChip: { backgroundColor: colors.warningSoft, borderRadius: radius.full, paddingHorizontal: 7, paddingVertical: 1 },
+  errorChipText: { fontSize: 10, fontWeight: "700", color: "#B45309" },
 });

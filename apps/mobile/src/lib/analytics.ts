@@ -64,6 +64,7 @@ export interface HistoryRow {
   is_correct: boolean | null;
   ai_score: number | null;
   self_assessment: string | null;
+  error_type: string | null;
   created_at: string;
 }
 
@@ -74,7 +75,7 @@ export async function getHistory(topicFilter?: string): Promise<HistoryRow[]> {
 
   let query = supabase
     .from("user_attempts")
-    .select("id, question_id, is_correct, ai_score, self_assessment, created_at, questions(question_text, topic)")
+    .select("id, question_id, is_correct, ai_score, self_assessment, error_type, created_at, questions(question_text, topic)")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -88,6 +89,7 @@ export async function getHistory(topicFilter?: string): Promise<HistoryRow[]> {
     is_correct: r.is_correct,
     ai_score: r.ai_score,
     self_assessment: r.self_assessment,
+    error_type: r.error_type,
     created_at: r.created_at,
   }));
   return topicFilter ? rows.filter((r) => r.topic === topicFilter) : rows;
