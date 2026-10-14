@@ -3,6 +3,7 @@ import { View, Text, FlatList, Pressable, StyleSheet, RefreshControl, ScrollView
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getHistory, type HistoryRow } from "../../lib/analytics";
+import { attemptBadge } from "../../lib/labels";
 import { stripMarkup } from "../../lib/text";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 
@@ -42,7 +43,7 @@ export default function HistoryScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
         ListEmptyComponent={<Text style={styles.empty}>{rows === null ? "載入中…" : "還沒有紀錄"}</Text>}
         renderItem={({ item }) => {
-          const badge = badgeFor(item);
+          const badge = attemptBadge(item);
           return (
             <Pressable style={styles.row} onPress={() => router.push(`/question/${item.question_id}?attempt=${item.id}`)}>
               <View style={[styles.badge, { backgroundColor: badge.bg }]}>
@@ -65,22 +66,6 @@ export default function HistoryScreen() {
       />
     </SafeAreaView>
   );
-}
-
-function badgeFor(item: HistoryRow): { bg: string; color: string; text: string } {
-  if (item.is_correct === true) return { bg: colors.successSoft, color: colors.success, text: "✓" };
-  if (item.is_correct === false) return { bg: colors.dangerSoft, color: colors.danger, text: "✕" };
-  if (item.ai_score != null) {
-    const v = item.ai_score;
-    const text = `${v}/10`;
-    if (v >= 7) return { bg: colors.successSoft, color: colors.success, text };
-    if (v >= 4) return { bg: colors.warningSoft, color: colors.warning, text };
-    return { bg: colors.dangerSoft, color: colors.danger, text };
-  }
-  if (item.self_assessment === "correct") return { bg: colors.successSoft, color: colors.success, text: "✓" };
-  if (item.self_assessment === "partial") return { bg: colors.warningSoft, color: colors.warning, text: "△" };
-  if (item.self_assessment === "wrong") return { bg: colors.dangerSoft, color: colors.danger, text: "✕" };
-  return { bg: "#F4F4F5", color: colors.ink3, text: "—" };
 }
 
 const styles = StyleSheet.create({

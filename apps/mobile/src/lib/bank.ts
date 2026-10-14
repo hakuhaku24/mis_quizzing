@@ -1,5 +1,10 @@
 import { supabase } from "./supabase";
+import type { AttemptOutcome } from "./labels";
 import type { Question } from "./types";
+
+export interface BankItem extends Question {
+  last_attempt: AttemptOutcome | null;
+}
 
 export interface BankFilters {
   school: "all" | "real" | "template";
@@ -10,6 +15,21 @@ export interface BankFilters {
 
 const PAGE_SIZE = 20;
 const MAX_CONCEPT_CHIPS = 10;
+
+/** Latest attempt per question (RLS limits rows to the current user). */
+export async function getLatestAttempts(questionIds: number[]): Promise<Map<number, AttemptOutcome>> {
+  const latest = new Map<number, AttemptOutcome>();
+  if (!questionIds.length) return latest;
+  const { data } = await supabase
+    .from("user_attempts")
+    .select("question_id, is_correct, ai_score, self_assessment")
+    .in("question_id", questionIds)
+    .order("created_at", { ascending: false });
+  for (const a of data ?? []) {
+    if (!latest.has(a.question_id)) latest.set(a.question_id, a);
+  }
+  return latest;
+}
 
 export async function getBankYears(): Promise<number[]> {
   const { data } = await supabase
@@ -41,7 +61,7 @@ export async function getBankConcepts(topic: BankFilters["topic"]): Promise<stri
 export async function getBankPage(
   filters: BankFilters,
   page: number
-): Promise<{ items: Question[]; hasMore: boolean }> {
+): Promise<{ items: BankItem[]; hasMore: boolean }> {
   let query = supabase
     .from("questions")
     .select("id, school, topic, subtopic, year_label, exam_year, question_number, question_text, question_type, difficulty, concepts, options, correct_option");
@@ -59,6 +79,9 @@ export async function getBankPage(
     .range(from, from + PAGE_SIZE); // fetch one extra to know if there's a next page
 
   if (error) throw error;
-  const items = (data ?? []).slice(0, PAGE_SIZE) as Question[];
+  const questions = (data ?? []).slice(0, PAGE_SIZE) as Question[];
+
+  const latest = await getLatestAttempts(questions.map((q) => q.id));
+  const items = questions.map((q) => ({ ...q, last_attempt: latest.get(q.id) ?? null }));
   return { items, hasMore: (data ?? []).length > PAGE_SIZE };
 }

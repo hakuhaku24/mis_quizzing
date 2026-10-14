@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getBankConcepts, getBankPage, getBankYears, type BankFilters } from "../../lib/bank";
+import { getBankConcepts, getBankPage, getBankYears, getLatestAttempts, type BankFilters, type BankItem } from "../../lib/bank";
+import { attemptBadge, sourceLabel, type AttemptOutcome } from "../../lib/labels";
 import { stripMarkup } from "../../lib/text";
 import { colors, radius, spacing, typography } from "../../lib/theme";
-import type { Question } from "../../lib/types";
 
 const TOPIC_LABELS: Record<string, string> = { all: "全部", CS: "計算機概論", DS: "資料結構", MIS: "管理資訊系統", STAT: "統計學" };
 const SCHOOL_LABELS: Record<string, string> = { all: "全部", real: "真題", template: "範本題" };
@@ -18,7 +18,7 @@ export default function BankScreen() {
   const [concept, setConcept] = useState<BankFilters["concept"]>("all");
   const [years, setYears] = useState<number[]>([]);
   const [concepts, setConcepts] = useState<string[]>([]);
-  const [items, setItems] = useState<Question[]>([]);
+  const [items, setItems] = useState<BankItem[]>([]);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -40,6 +40,27 @@ export default function BankScreen() {
   }, [topic]);
 
   const filters: BankFilters = { school, topic, examYear, concept };
+
+  // Coming back from answering a question: refresh status badges in place
+  // (keeps pagination and scroll position).
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+  useFocusEffect(
+    useCallback(() => {
+      const ids = itemsRef.current.map((q) => q.id);
+      if (!ids.length) return;
+      let ignore = false;
+      getLatestAttempts(ids).then((latest) => {
+        if (ignore) return;
+        setItems((prev) => prev.map((q) => ({ ...q, last_attempt: latest.get(q.id) ?? null })));
+      });
+      return () => {
+        ignore = true;
+      };
+    }, [])
+  );
 
   // "Load more" (pagination) — triggered from the list's onEndReached handler,
   // not from an effect, so setState here is a normal event-driven update.
@@ -133,16 +154,27 @@ export default function BankScreen() {
           <Pressable style={styles.row} onPress={() => router.push(`/question/${item.id}`)}>
             <View style={styles.tagRow}>
               {item.school && item.school !== "template" && (
-                <Text style={styles.tagYear}>{item.year_label ?? item.exam_year}</Text>
+                <Text style={styles.tagYear}>{sourceLabel(item)}</Text>
               )}
               <Text style={styles.tagTopic}>{TOPIC_LABELS[item.topic ?? ""] ?? item.topic}</Text>
               {item.concepts?.[0] && <Text style={styles.tagConcept}>#{item.concepts[0]}</Text>}
+              <View style={{ flex: 1 }} />
+              {item.last_attempt && <StatusBadge outcome={item.last_attempt} />}
             </View>
             <Text style={styles.rowText} numberOfLines={2}>{stripMarkup(item.question_text)}</Text>
           </Pressable>
         )}
       />
     </SafeAreaView>
+  );
+}
+
+function StatusBadge({ outcome }: { outcome: AttemptOutcome }) {
+  const badge = attemptBadge(outcome);
+  return (
+    <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+      <Text style={[styles.statusBadgeText, { color: badge.color }]}>{badge.text === "—" ? "已作答" : badge.text}</Text>
+    </View>
   );
 }
 
@@ -184,7 +216,9 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl, gap: spacing.sm },
   empty: { textAlign: "center", color: colors.ink3, paddingVertical: spacing.xxl },
   row: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.md, gap: 6 },
-  tagRow: { flexDirection: "row", gap: 6 },
+  tagRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.full },
+  statusBadgeText: { fontSize: 10.5, fontWeight: "800" },
   tagYear: { fontSize: 10, fontWeight: "700", color: colors.ink2, backgroundColor: "#F4F4F5", paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.full },
   tagTopic: { fontSize: 10, fontWeight: "700", color: colors.info, backgroundColor: colors.infoSoft, paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.full },
   tagConcept: { fontSize: 10, fontWeight: "600", color: colors.ink3 },

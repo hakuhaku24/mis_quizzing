@@ -8,6 +8,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import RichText from "../../components/RichText";
 import { loadDraft, saveDraft, clearDraft } from "../../lib/drafts";
+import { sourceLabel } from "../../lib/labels";
 import { getQuestion, getAttempt, submitAttempt, setSelfAssessment, setErrorType, gradeAttempt } from "../../lib/attempts";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { AiGrade, Confidence, ErrorType, Question, SelfAssessment, Solution } from "../../lib/types";
@@ -182,7 +183,7 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
           )}
           <View style={styles.card}>
             <View style={styles.tagRow}>
-              {question.school && <Tag text={question.school === "template" ? "範本題" : question.school} />}
+              {sourceLabel(question) && <Tag text={sourceLabel(question)!} />}
               {question.topic && <Tag text={TOPIC_LABELS[question.topic] ?? question.topic} tone="info" />}
               {(question.concepts ?? []).slice(0, 2).map((c) => <Tag key={c} text={`#${c}`} />)}
             </View>
