@@ -100,7 +100,7 @@ mis-grad-exam-coach/
 | # | 項目 | 現況 | 要求 |
 |---|---|---|---|
 | 0-1 | AI 批改同意對話框（最小版） | 沒有 | 第一次送出作答時跳一次對話框，說明作答內容會傳給第三方 AI（Groq）批改，按同意後記住、不再出現。Apple 5.1.2(i)（2025/11 版）要求分享資料給第三方 AI 前取得明確同意；Google 只需在隱私權政策／資料安全性表單揭露。不做「設定裡撤回」等額外功能 |
-| 0-2 | 刪除帳號 | ✅ 後端已部署並實測（2026-10-14）；app 端待 OTA 推送 | 首頁右上角帳號按鈕 → 選單「登出／刪除帳號」→ 二次確認 → Edge Function `delete-account`（驗證本人 JWT，service role 刪 `user_attempts`、`user_question_states`、auth 使用者）→ 本機登出 |
+| 0-2 | 刪除帳號 | ✅ 完成（2026-10-14，後端實測＋OTA 推送後手機確認） | 首頁右上角帳號按鈕 → 選單「登出／刪除帳號」→ 二次確認 → Edge Function `delete-account`（驗證本人 JWT，service role 刪 `user_attempts`、`user_question_states`、auth 使用者）→ 本機登出 |
 | 0-3 | 刪除帳號說明網頁 | 沒有 | 公開網頁，寫上 app 名稱「考研教練」，提供不用重裝 app 也能申請刪除的方式（例如 email） |
 | 0-4 | 隱私權政策網頁 | 沒有 | 寫明收集的資料（email、作答內容、批改結果、自評）、第三方服務（Supabase、Groq）、刪除方式、聯絡方式 |
 | 0-5 | 批改次數上限 | ✅ 早就有了 | `grade-attempt` 已有每人每日上限，預設 15 次，用 `supabase secrets set DAILY_GRADE_LIMIT=N` 調整，不用重新部署。超過回 429 和中文提示。注意：日界線是 UTC 0 點（台灣早上 8 點） |
