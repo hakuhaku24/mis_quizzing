@@ -6,8 +6,8 @@ import { supabase } from "./supabase";
  * Bump CONSENT_VERSION whenever the list of AI providers changes (e.g. when
  * the paid Gemini fallback is enabled) so everyone is asked again.
  */
-const CONSENT_VERSION = 1;
-export const AI_PROVIDERS = "Groq";
+const CONSENT_VERSION = 2;
+export const AI_PROVIDERS = "Groq；Groq 忙碌時改用 Google Gemini 付費服務";
 
 export const CONSENT_TITLE = "AI 批改說明";
 export const CONSENT_MESSAGE =

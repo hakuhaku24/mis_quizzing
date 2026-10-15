@@ -57,7 +57,9 @@ interface Grade {
   feedback: string;
 }
 
-async function callGroq(apiKey: string, messages: { role: string; content: string }[]) {
+type Msg = { role: string; content: string };
+
+async function callGroq(apiKey: string, messages: Msg[]) {
   const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -75,16 +77,121 @@ async function callGroq(apiKey: string, messages: { role: string; content: strin
   });
   if (!resp.ok) {
     const detail = await resp.text();
-    throw new Error(`grader API error (${resp.status}): ${detail.slice(0, 300)}`);
+    throw new Error(`groq ${resp.status}: ${detail.slice(0, 200)}`);
   }
   const data = await resp.json();
   return data.choices[0].message.content as string;
 }
 
+// Paid fallback. Student answers may only go to Google's PAID tier (its free
+// tier reuses submitted content), so this uses GEMINI_PAID_API_KEY only.
+const GEMINI_MODEL = "gemini-3.1-flash-lite";
+const GEMINI_PRICE_PER_TOKEN = { input: 0.25e-6, output: 1.5e-6 }; // USD, ai.google.dev pricing 2026-10
+
+async function callGemini(apiKey: string, messages: Msg[]) {
+  const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+  const contents = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    {
+      method: "POST",
+      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: system }] },
+        contents,
+        generationConfig: { temperature: 0.2, maxOutputTokens: 8000, responseMimeType: "application/json" },
+      }),
+      signal: AbortSignal.timeout(60_000),
+    },
+  );
+  if (!resp.ok) {
+    const detail = await resp.text();
+    throw new Error(`gemini ${resp.status}: ${detail.slice(0, 200)}`);
+  }
+  const data = await resp.json();
+  const text = (data.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("");
+  if (!text) throw new Error(`gemini returned no text (${data.candidates?.[0]?.finishReason})`);
+  const u = data.usageMetadata ?? {};
+  const output = (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0);
+  return { text, prompt: u.promptTokenCount ?? 0, output };
+}
+
+/** Free first, paid second. Once the free provider fails within a request,
+ *  the remaining calls of that request go straight to the paid one. Every
+ *  paid call is logged (no user id) in ai_usage_log. */
+class Grader {
+  private freeDown = false;
+  private reason: string | null = null;
+  provider: "groq" | "gemini" = "groq";
+
+  constructor(
+    private groqKey: string | undefined,
+    private geminiKey: string | undefined,
+    private admin: ReturnType<typeof createClient> | null,
+  ) {
+    if (Deno.env.get("GRADER_PRIMARY") === "gemini") {
+      this.freeDown = true;
+      this.reason = "GRADER_PRIMARY=gemini";
+    }
+  }
+
+  async call(messages: Msg[], purpose: string): Promise<string> {
+    if (!this.freeDown && this.groqKey) {
+      try {
+        const text = await callGroq(this.groqKey, messages);
+        this.provider = "groq";
+        return text;
+      } catch (e) {
+        this.freeDown = true;
+        this.reason = String(e).slice(0, 200);
+        console.error("groq failed, falling back to paid gemini:", this.reason);
+      }
+    }
+    if (!this.geminiKey) throw new Error("no AI provider available");
+    const r = await callGemini(this.geminiKey, messages);
+    this.provider = "gemini";
+    const cost = r.prompt * GEMINI_PRICE_PER_TOKEN.input + r.output * GEMINI_PRICE_PER_TOKEN.output;
+    if (this.admin) {
+      const { error } = await this.admin.from("ai_usage_log").insert({
+        purpose, provider: "gemini", model: GEMINI_MODEL, prompt_tokens: r.prompt,
+        output_tokens: r.output, est_cost_usd: Number(cost.toFixed(6)), fallback_reason: this.reason,
+      });
+      if (error) console.error("ai_usage_log insert failed:", error.message);
+    }
+    return r.text;
+  }
+}
+
+// JSON escapes (\b \f \n \r \t) swallow the first letter of LaTeX commands a
+// model writes with one backslash (\frac -> form feed + "rac"); double it.
+const LATEX_AFTER_ESCAPE =
+  /(?<!\\)\\(?=(?:frac|forall|flat|floor|beta|begin|bar|binom|bigcup|bigcap|big|bmod|boldsymbol|bot|neq|nabla|not|nu|neg|newline|nsubseteq|nexists|ni|rho|rightarrow|right|rceil|rfloor|rangle|rm|rbrace|tau|theta|times|textbf|text|tilde|triangle|tfrac|tan|top|to)(?![a-zA-Z]))/g;
+
+function parseModelJson<T>(text: string): T {
+  const protectedText = text.replace(LATEX_AFTER_ESCAPE, "\\\\");
+  try {
+    return JSON.parse(protectedText);
+  } catch {
+    const fenced = protectedText.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    // last resort: escape stray backslashes that aren't valid JSON escapes
+    return JSON.parse((fenced ? fenced[1] : protectedText).replace(/\\(?!["\\/bfnrtu])/g, "\\\\"));
+  }
+}
+
+/** Start of the current day in Taiwan (UTC+8), as an ISO timestamp. */
+function taiwanDayStart(): string {
+  const shifted = new Date(Date.now() + 8 * 3_600_000);
+  shifted.setUTCHours(0, 0, 0, 0);
+  return new Date(shifted.getTime() - 8 * 3_600_000).toISOString();
+}
+
 Deno.serve(async (req: Request) => {
   try {
-    const apiKey = Deno.env.get("GROQ_API_KEY");
-    if (!apiKey) return Response.json({ error: "GROQ_API_KEY not configured" }, { status: 503 });
+    const groqKey = Deno.env.get("GROQ_API_KEY");
+    const geminiKey = Deno.env.get("GEMINI_PAID_API_KEY");
+    if (!groqKey && !geminiKey) return Response.json({ error: "AI 批改尚未設定" }, { status: 503 });
 
     const { attempt_id } = await req.json();
     if (!attempt_id) return Response.json({ error: "attempt_id required" }, { status: 400 });
@@ -134,13 +241,11 @@ Deno.serve(async (req: Request) => {
     // no explicit user_id filter is needed. Adjustable without redeploying:
     // `supabase secrets set DAILY_GRADE_LIMIT=20`.
     const dailyLimit = Number(Deno.env.get("DAILY_GRADE_LIMIT") ?? "15");
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
     const { count: gradedToday } = await supabase
       .from("user_attempts")
       .select("id", { count: "exact", head: true })
       .not("ai_score", "is", null)
-      .gte("created_at", todayStart.toISOString());
+      .gte("created_at", taiwanDayStart());
     if ((gradedToday ?? 0) >= dailyLimit) {
       return Response.json(
         { error: `今日 AI 批改次數已達上限（${dailyLimit} 次），明天再繼續，或先用自評記錄這題` },
@@ -162,13 +267,23 @@ Deno.serve(async (req: Request) => {
       { role: "user", content: userMsg },
     ];
 
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const admin = serviceKey ? createClient(Deno.env.get("SUPABASE_URL")!, serviceKey) : null;
+    const grader = new Grader(groqKey, geminiKey, admin);
+
     let grade: Grade | null = null;
     let droppedPoints = 0;
     for (let attempt_n = 0; attempt_n < 2; attempt_n++) {
-      const content = await callGroq(apiKey, messages);
+      let content: string;
+      try {
+        content = await grader.call(messages, attempt_n === 0 ? "grade" : "regrade");
+      } catch (e) {
+        console.error("all AI providers failed:", e);
+        return Response.json({ error: "AI 批改暫時無法使用，請稍後再試，或先用自評記錄這題" }, { status: 503 });
+      }
       let parsed: Grade;
       try {
-        parsed = JSON.parse(content);
+        parsed = parseModelJson<Grade>(content);
       } catch {
         return Response.json({ error: "grader returned invalid JSON" }, { status: 502 });
       }
@@ -192,7 +307,7 @@ Deno.serve(async (req: Request) => {
     );
     if (structured.length) {
       try {
-        const vcontent = await callGroq(apiKey, [
+        const vcontent = await grader.call([
           { role: "system", content: VERIFIER_SYSTEM },
           {
             role: "user",
@@ -201,8 +316,9 @@ Deno.serve(async (req: Request) => {
               null, 2
             )}`,
           },
-        ]);
-        const checks: { index: number; verdict?: string; reason?: string }[] = JSON.parse(vcontent).checks ?? [];
+        ], "verify");
+        const checks: { index: number; verdict?: string; reason?: string }[] =
+          parseModelJson<{ checks?: { index: number; verdict?: string; reason?: string }[] }>(vcontent).checks ?? [];
         const verdictOf = (i: number) => checks.find((c) => c.index === i)?.verdict ?? "valid";
         const kept: GotPoint[] = [];
         structured.forEach((gp, i) => {
@@ -231,7 +347,7 @@ Deno.serve(async (req: Request) => {
 
     await supabase.from("user_attempts").update({ ai_score: score, ai_feedback: grade }).eq("id", attempt_id);
 
-    return Response.json({ grade, cached: false });
+    return Response.json({ grade, cached: false, provider: grader.provider });
   } catch (e) {
     console.error(e);
     return Response.json({ error: String(e) }, { status: 500 });
