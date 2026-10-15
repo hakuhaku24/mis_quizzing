@@ -35,11 +35,29 @@ ESSAY_SYSTEM = """你是台灣資管所研究所入學考試的解題老師。�
  "explanation": "1-3 句補充：常見錯誤或延伸考點，無則空字串"}
 數學式用 $...$ LaTeX，程式碼用 markdown 程式碼區塊。"""
 
-MC_SYSTEM = """你是台灣資管所研究所入學考試的解題老師。判斷單選題的正確答案，繁體中文，只輸出 JSON（無 markdown 圍欄）：
-{"correct_option": "A|B|C|D|E",
- "solution_text": "先一句話說明正確答案與理由，再逐一簡短說明其他選項為何錯誤（每個選項一行、開頭用「・」）",
+MC_SYSTEM = """你是台灣資管所研究所入學考試的解題老師。判斷選擇題的正確答案，繁體中文，只輸出 JSON（無 markdown 圍欄）：
+{"multi_select": true|false,
+ "correct_options": ["A", ...],
+ "solution_text": "先一句話說明正確答案與理由，再逐一簡短說明每個選項為何對或錯（每個選項一行、開頭用「・」）",
  "confidence": "high|medium|low"}
+題目若要求選出所有正確選項（例如 "Select all that apply"、複選），multi_select 為 true，correct_options 列出全部正確選項；否則為單選，correct_options 只放一個。
 不確定時仍要選出最可能的答案並把 confidence 設為 low。"""
+
+
+def parse_mc_answer(out: dict, letters: list[str]) -> tuple[list[str], bool] | None:
+    """Normalize the model's answer to (sorted letters, is_multi_select).
+    Accepts the legacy single "correct_option" field too. Returns None when
+    the answer isn't usable."""
+    raw = out.get("correct_options")
+    if raw is None:
+        raw = [out.get("correct_option", "")]
+    if isinstance(raw, str):
+        raw = re.findall(r"[A-Z]", raw.upper())
+    picked = sorted({str(x).strip().upper() for x in raw if str(x).strip()})
+    if not picked or any(p not in letters for p in picked):
+        return None
+    multi = bool(out.get("multi_select")) or len(picked) > 1
+    return picked, multi
 
 
 def repair_json(text: str) -> dict:
@@ -105,6 +123,15 @@ def repair_json(text: str) -> dict:
     return json.loads("".join(out))
 
 
+def ensure_question_flag_columns(conn: sqlite3.Connection) -> None:
+    """Mirror supabase/migrations/005_question_flags.sql in the local SQLite copy."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(questions)")}
+    for col in ("is_multi_select", "needs_drawing"):
+        if col not in cols:
+            conn.execute(f"ALTER TABLE questions ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0")
+    conn.commit()
+
+
 def api_key() -> str:
     env = ROOT / "apps" / "web" / ".env.local"
     for line in env.read_text(encoding="utf-8").splitlines():
@@ -113,7 +140,7 @@ def api_key() -> str:
     raise SystemExit("GEMINI_API_KEY not found")
 
 
-def llm(key: str, system: str, user: str) -> dict:
+def llm(key: str, system: str, user: str, model: str = MODEL, attempts: int = 8) -> dict:
     # Algorithm-heavy questions (recursive implementations, DFS, heap
     # construction, Java tracing...) need more completion budget than a quick
     # answer — start generous and bump it once if the model gets cut off
@@ -131,13 +158,13 @@ def llm(key: str, system: str, user: str) -> dict:
             },
         }
         return urllib.request.Request(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={key}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
             data=json.dumps(body).encode(),
             headers={"Content-Type": "application/json", "User-Agent": "mis-grad-exam-coach/1.0"},
         )
 
     truncation_retried = False
-    for attempt in range(8):
+    for attempt in range(attempts):
         try:
             with urllib.request.urlopen(build_req(), timeout=180) as r:
                 data = json.load(r)
@@ -163,7 +190,6 @@ def llm(key: str, system: str, user: str) -> dict:
             print(f"    network error ({e}), retry in {2 ** (attempt + 2)}s", flush=True)
             time.sleep(2 ** (attempt + 2))
     raise RuntimeError("llm failed after retries")
-    raise RuntimeError("llm failed after retries")
 
 
 def main() -> None:
@@ -174,6 +200,7 @@ def main() -> None:
 
     key = api_key()
     conn = sqlite3.connect(DB)
+    ensure_question_flag_columns(conn)
     rows = conn.execute(
         """SELECT q.id, q.question_text, q.question_type, q.options, q.topic, q.exam_year
            FROM questions q
@@ -197,18 +224,23 @@ def main() -> None:
                 letters = [chr(65 + i) for i in range(len(opts))]
                 user = head + "\n\n選項：\n" + "\n".join(f"({l}) {o}" for l, o in zip(letters, opts))
                 out = llm(key, MC_SYSTEM, user)
-                co = str(out.get("correct_option", "")).strip().upper()[:1]
-                if co not in letters:
-                    print(f"  q{qid}: invalid option {co!r}, skipped", flush=True)
+                parsed = parse_mc_answer(out, letters)
+                if not parsed:
+                    print(f"  q{qid}: invalid answer {out.get('correct_options')!r}, skipped", flush=True)
                     continue
+                picked, multi = parsed
                 sol = out.get("solution_text", "").strip()
                 conf = out.get("confidence", "")
                 expl = f"AI 判斷信心：{conf}" if conf else None
-                conn.execute("UPDATE questions SET correct_option = ? WHERE id = ?", (co, qid))
+                answer_label = "".join(f"({p})" for p in picked) + ("（複選）" if multi else "")
+                conn.execute(
+                    "UPDATE questions SET correct_option = ?, is_multi_select = ? WHERE id = ?",
+                    (",".join(picked), int(multi), qid),
+                )
                 conn.execute(
                     """INSERT INTO solutions (question_id, solution_text, explanation,
                        source_type, verified_status) VALUES (?, ?, ?, 'ai_draft', 'ai_draft')""",
-                    (qid, f"正確答案：({co})\n{sol}", expl),
+                    (qid, f"正確答案：{answer_label}\n{sol}", expl),
                 )
             else:
                 out = llm(key, ESSAY_SYSTEM, head)

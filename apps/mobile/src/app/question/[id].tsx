@@ -8,6 +8,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import RichText from "../../components/RichText";
 import { loadDraft, saveDraft, clearDraft } from "../../lib/drafts";
+import { choiceLabel, isMultiSelect, parseChoice, sameChoice, toggleChoice } from "../../lib/choices";
 import { sourceLabel } from "../../lib/labels";
 import { getQuestion, getAttempt, submitAttempt, setSelfAssessment, setErrorType, gradeAttempt } from "../../lib/attempts";
 import { colors, radius, spacing, typography } from "../../lib/theme";
@@ -103,17 +104,23 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
   }
 
   const isMC = question.question_type === "multiple_choice";
+  const multi = isMC && isMultiSelect(question);
   const options = parseOptions(question);
-  const answered = isMC ? !!selectedOption : !!answer.trim();
+  const picked = parseChoice(selectedOption);
+  const keyLetters = parseChoice(question.correct_option);
+  const answered = isMC ? picked.length > 0 : !!answer.trim();
   const canSubmit = answered && !!confidence;
+
+  const pickOption = (letter: string) =>
+    setSelectedOption(multi ? toggleChoice(selectedOption, letter) : letter);
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     const timeSpent = Math.round((Date.now() - startTime) / 1000);
     let correct: boolean | null = null;
-    if (isMC && question.correct_option) {
-      correct = selectedOption === question.correct_option;
+    if (isMC && keyLetters.length) {
+      correct = sameChoice(selectedOption, question.correct_option);
       setIsCorrect(correct);
     }
     try {
@@ -196,12 +203,13 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
             )}
             {isMC ? (
               <View style={{ gap: spacing.sm }}>
+                {multi && !submitted && <Text style={styles.multiHint}>複選題：選出所有正確的選項（全對才算對）</Text>}
                 {options.map((opt, i) => {
                   const letter = String.fromCharCode(65 + i);
-                  const isSelected = selectedOption === letter;
-                  const isRight = letter === question.correct_option;
+                  const isSelected = picked.includes(letter);
+                  const isRight = keyLetters.includes(letter);
                   let tone: "idle" | "selected" | "right" | "wrong" | "faded" = "idle";
-                  if (submitted && question.correct_option) {
+                  if (submitted && keyLetters.length) {
                     tone = isRight ? "right" : isSelected ? "wrong" : "faded";
                   } else if (submitted) {
                     tone = isSelected ? "selected" : "faded";
@@ -212,14 +220,22 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
                     <Pressable
                       key={letter}
                       disabled={submitted}
-                      onPress={() => setSelectedOption(letter)}
+                      onPress={() => pickOption(letter)}
                       style={[styles.option, optionToneStyle(tone)]}
                     >
-                      <View style={[styles.optionBadge, tone === "selected" || tone === "right" ? styles.optionBadgeActive : null]}>
+                      <View
+                        style={[
+                          styles.optionBadge,
+                          multi && styles.optionBadgeSquare,
+                          tone === "selected" || tone === "right" ? styles.optionBadgeActive : null,
+                        ]}
+                      >
                         <Text style={[styles.optionBadgeText, (tone === "selected" || tone === "right") && { color: "#fff" }]}>{letter}</Text>
                       </View>
                       <Text style={styles.optionText}>{opt}</Text>
-                      {submitted && isRight && <Text style={styles.rightMark}>✓ 正解</Text>}
+                      {submitted && isRight && (
+                        <Text style={styles.rightMark}>{multi && !isSelected ? "✓ 正解（漏選）" : "✓ 正解"}</Text>
+                      )}
                     </Pressable>
                   );
                 })}
@@ -259,7 +275,9 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
                 {isMC && isCorrect !== null && (
                   <View style={[styles.resultBanner, { backgroundColor: isCorrect ? colors.successSoft : colors.dangerSoft }]}>
                     <Text style={{ color: isCorrect ? colors.success : colors.danger, fontWeight: "700", fontSize: 13 }}>
-                      {isCorrect ? "✓ 答對了！" : `✗ 答錯了，正確答案是 ${question.correct_option}`}
+                      {isCorrect
+                        ? "✓ 答對了！"
+                        : `✗ 答錯了，正確答案是 ${choiceLabel(question.correct_option)}${multi ? "（複選，全對才算對）" : ""}`}
                     </Text>
                   </View>
                 )}
@@ -294,7 +312,7 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
                   </View>
                 )}
 
-                {(!isMC || (submitted && !question.correct_option)) && (
+                {(!isMC || (submitted && keyLetters.length === 0)) && (
                   <View style={{ gap: spacing.sm }}>
                     <Text style={styles.hint}>{aiGrade ? "（也可以手動自評）" : "或對照詳解後自評："}</Text>
                     <View style={styles.pillRow}>
@@ -390,6 +408,8 @@ const styles = StyleSheet.create({
   option: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 13, borderRadius: radius.md, borderWidth: 1.5 },
   optionBadge: { width: 22, height: 22, borderRadius: radius.full, borderWidth: 1.5, borderColor: "#D4D4D8", alignItems: "center", justifyContent: "center" },
   optionBadgeActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  optionBadgeSquare: { borderRadius: 6 },
+  multiHint: { fontSize: 12, fontWeight: "700", color: colors.accent },
   optionBadgeText: { fontSize: 11, fontWeight: "800", color: colors.ink3 },
   optionText: { flex: 1, fontSize: 13.5, lineHeight: 19, color: colors.ink },
   rightMark: { color: colors.success, fontSize: 11, fontWeight: "700" },

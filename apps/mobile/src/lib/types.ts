@@ -20,8 +20,11 @@ export interface Question {
   difficulty: number | null;
   value_score: number | null;
   options: string[] | null;
+  /** comma-separated letters; more than one for multi-select (see lib/choices.ts) */
   correct_option: string | null;
   concepts: string[] | null;
+  is_multi_select?: boolean | null;
+  needs_drawing?: boolean | null;
 }
 
 export interface Solution {
