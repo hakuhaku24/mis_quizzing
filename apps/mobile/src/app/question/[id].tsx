@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TextInput, Pressable, StyleSheet,
-  ActivityIndicator, KeyboardAvoidingView, Platform, Modal,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -12,6 +12,7 @@ import { choiceLabel, isMultiSelect, parseChoice, sameChoice, toggleChoice } fro
 import { sourceLabel } from "../../lib/labels";
 import { randomQuestionId } from "../../lib/random";
 import { REPORT_REASONS, submitReport, type ReportReason } from "../../lib/reports";
+import { CONSENT_MESSAGE, CONSENT_TITLE, grantAIConsent, hasAIConsent } from "../../lib/consent";
 import { getQuestion, getAttempt, submitAttempt, setSelfAssessment, setErrorType, gradeAttempt } from "../../lib/attempts";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { AiGrade, Confidence, ErrorType, Question, SelfAssessment, Solution } from "../../lib/types";
@@ -171,6 +172,24 @@ function QuestionView({ id, savedAttemptId, randomMode }: { id: number; savedAtt
 
   const handleGrade = async () => {
     if (!attemptId || grading) return;
+    if (!(await hasAIConsent())) {
+      Alert.alert(CONSENT_TITLE, CONSENT_MESSAGE, [
+        { text: "先不要", style: "cancel" },
+        {
+          text: "同意並批改",
+          onPress: async () => {
+            await grantAIConsent();
+            runGrade();
+          },
+        },
+      ]);
+      return;
+    }
+    runGrade();
+  };
+
+  const runGrade = async () => {
+    if (!attemptId) return;
     setGrading(true);
     setGradeError(null);
     try {
