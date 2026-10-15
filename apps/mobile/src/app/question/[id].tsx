@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TextInput, Pressable, StyleSheet,
-  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -11,6 +11,7 @@ import { loadDraft, saveDraft, clearDraft } from "../../lib/drafts";
 import { choiceLabel, isMultiSelect, parseChoice, sameChoice, toggleChoice } from "../../lib/choices";
 import { sourceLabel } from "../../lib/labels";
 import { randomQuestionId } from "../../lib/random";
+import { REPORT_REASONS, submitReport, type ReportReason } from "../../lib/reports";
 import { getQuestion, getAttempt, submitAttempt, setSelfAssessment, setErrorType, gradeAttempt } from "../../lib/attempts";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { AiGrade, Confidence, ErrorType, Question, SelfAssessment, Solution } from "../../lib/types";
@@ -389,9 +390,81 @@ function QuestionView({ id, savedAttemptId, randomMode }: { id: number; savedAtt
               <Text style={styles.retryButtonText}>再練一次</Text>
             </Pressable>
           )}
+
+          <ReportLink questionId={question.id} attemptId={attemptId} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function ReportLink({ questionId, attemptId }: { questionId: number; attemptId: number | null }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<ReportReason | null>(null);
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async () => {
+    if (!reason || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await submitReport({ questionId, attemptId, reason, note });
+      setSent(true);
+      setOpen(false);
+    } catch {
+      setError("送出失敗，請稍後再試");
+    }
+    setSending(false);
+  };
+
+  if (sent) return <Text style={styles.reportDone}>已收到你的回報，謝謝！我們會盡快確認這題。</Text>;
+
+  return (
+    <>
+      <Pressable style={styles.reportLink} onPress={() => setOpen(true)}>
+        <Ionicons name="flag-outline" size={13} color={colors.ink3} />
+        <Text style={styles.reportLinkText}>這題有問題？回報給我們</Text>
+      </Pressable>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.cardTitle}>回報這題的問題</Text>
+            <View style={styles.pillRow}>
+              {(Object.keys(REPORT_REASONS) as ReportReason[]).map((r) => (
+                <Pressable key={r} onPress={() => setReason(r)} style={[styles.pill, reason === r && styles.pillActive]}>
+                  <Text style={[styles.pillText, reason === r && styles.pillTextActive]}>{REPORT_REASONS[r]}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              style={styles.reportNote}
+              placeholder="補充說明（選填），例如：正確答案應該是 C，因為…"
+              placeholderTextColor={colors.ink3}
+              multiline
+              maxLength={1000}
+              value={note}
+              onChangeText={setNote}
+            />
+            {error && <Text style={styles.errorText}>{error}</Text>}
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancel} onPress={() => setOpen(false)}>
+                <Text style={styles.modalCancelText}>取消</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalSend, (!reason || sending) && styles.submitButtonDisabled]}
+                disabled={!reason || sending}
+                onPress={send}
+              >
+                <Text style={styles.submitButtonText}>{sending ? "送出中…" : "送出"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -466,6 +539,16 @@ const styles = StyleSheet.create({
   drawHint: { fontSize: 12, lineHeight: 18, color: colors.ink2, backgroundColor: colors.accentSoft, borderRadius: radius.sm, padding: spacing.sm, marginBottom: spacing.sm },
   retryButton: { flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.accent, borderRadius: radius.md, paddingVertical: 12, backgroundColor: colors.surface },
   retryButtonText: { color: colors.accent, fontWeight: "700", fontSize: 14 },
+  reportLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingVertical: spacing.sm },
+  reportLinkText: { fontSize: 12, color: colors.ink3 },
+  reportDone: { fontSize: 12, color: colors.success, textAlign: "center", paddingVertical: spacing.sm },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: spacing.xl },
+  modalCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md },
+  reportNote: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.md, minHeight: 80, fontSize: 13, color: colors.ink, textAlignVertical: "top" },
+  modalButtons: { flexDirection: "row", justifyContent: "flex-end", gap: spacing.sm },
+  modalCancel: { paddingHorizontal: spacing.lg, paddingVertical: 10, borderRadius: radius.md },
+  modalCancelText: { color: colors.ink2, fontWeight: "600", fontSize: 14 },
+  modalSend: { backgroundColor: colors.accent, borderRadius: radius.md, paddingHorizontal: spacing.xl, paddingVertical: 10 },
   aiCard: { backgroundColor: colors.aiSoft, borderWidth: 1, borderColor: colors.aiLine, borderRadius: radius.md, padding: spacing.md, gap: spacing.md },
   aiHeaderRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   aiScore: { fontSize: 22, fontWeight: "800", color: colors.aiAccent },
