@@ -27,7 +27,7 @@ RESTORE = [
     (re.compile(r"\x0c(?=rac|orall|lat|loor)"), "\\\\f"),
     (re.compile(r"\x08(?=eta|egin|ar|inom|ig|mod|oldsymbol|ot)"), "\\\\b"),
     (re.compile(r"\t(?=heta|imes|ext|au\b|o\b|op\b|ilde|riangle|frac|an\b)"), "\\\\t"),
-    (re.compile(r"\r(?=ightarrow|ight|ho\b|ceil|floor|angle)"), "\\\\r"),
+    (re.compile(r"\r(?=ightarrow|ight|ho\b|ceil|floor|angle|m\b|brace)"), "\\\\r"),
     (re.compile(r"\n(?=eq\b|abla|ot\b|u\b|eg\b|subseteq|exists)"), "\\\\n"),
 ]
 

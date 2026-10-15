@@ -65,7 +65,7 @@ def parse_mc_answer(out: dict, letters: list[str]) -> tuple[list[str], bool] | N
 # Doubling the backslash before a known command keeps the LaTeX intact.
 LATEX_AFTER_ESCAPE = re.compile(
     r"(?<!\\)\\(?=(?:frac|forall|flat|floor|beta|begin|bar|binom|bigcup|bigcap|big|bmod|boldsymbol|bot|"
-    r"neq|nabla|not|nu|neg|newline|nsubseteq|nexists|ni|rho|rightarrow|right|rceil|rfloor|rangle|"
+    r"neq|nabla|not|nu|neg|newline|nsubseteq|nexists|ni|rho|rightarrow|right|rceil|rfloor|rangle|rm|rbrace|"
     r"tau|theta|times|textbf|text|tilde|triangle|tfrac|tan|top|to)(?![a-zA-Z]))"
 )
 
