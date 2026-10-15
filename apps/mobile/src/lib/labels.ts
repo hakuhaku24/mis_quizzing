@@ -11,6 +11,10 @@ const SCHOOL_NAMES: Record<string, string> = {
   CCU: "中正",
 };
 
+export function schoolName(code: string): string {
+  return SCHOOL_NAMES[code] ?? code;
+}
+
 /** "113 中央" for real exam questions, "範本題" for templates. */
 export function sourceLabel(q: { school: string | null; exam_year?: number | null }): string | null {
   if (!q.school) return null;

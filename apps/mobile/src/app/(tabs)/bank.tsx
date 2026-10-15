@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getBankConcepts, getBankPage, getBankYears, getLatestAttempts, type BankFilters, type BankItem } from "../../lib/bank";
-import { attemptBadge, sourceLabel, type AttemptOutcome } from "../../lib/labels";
+import { getBankConcepts, getBankPage, getBankSchools, getBankYears, getLatestAttempts, type BankFilters, type BankItem } from "../../lib/bank";
+import { attemptBadge, schoolName, sourceLabel, type AttemptOutcome } from "../../lib/labels";
 import { stripMarkup } from "../../lib/text";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 
@@ -13,6 +13,8 @@ const SCHOOL_LABELS: Record<string, string> = { all: "全部", real: "真題", t
 export default function BankScreen() {
   const router = useRouter();
   const [school, setSchool] = useState<BankFilters["school"]>("all");
+  const [schoolCode, setSchoolCode] = useState<BankFilters["schoolCode"]>("all");
+  const [schools, setSchools] = useState<string[]>([]);
   const [topic, setTopic] = useState<BankFilters["topic"]>("all");
   const [examYear, setExamYear] = useState<BankFilters["examYear"]>("all");
   const [concept, setConcept] = useState<BankFilters["concept"]>("all");
@@ -25,8 +27,23 @@ export default function BankScreen() {
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
-    getBankYears().then(setYears);
+    getBankSchools().then(setSchools).catch(() => setSchools([]));
   }, []);
+
+  // years offered depend on the chosen school; drop a year that school doesn't have
+  useEffect(() => {
+    let ignore = false;
+    getBankYears(schoolCode)
+      .then((ys) => {
+        if (ignore) return;
+        setYears(ys);
+        setExamYear((y) => (y !== "all" && !ys.includes(y) ? "all" : y));
+      })
+      .catch(() => {});
+    return () => {
+      ignore = true;
+    };
+  }, [schoolCode]);
 
   // The concept vocabulary depends on which subject is selected (DS's tags
   // — 樹/排序/圖/雜湊/搜尋… — are meaningless as filters for CS or MIS).
@@ -40,7 +57,7 @@ export default function BankScreen() {
     };
   }, [topic]);
 
-  const filters: BankFilters = { school, topic, examYear, concept };
+  const filters: BankFilters = { school, schoolCode, topic, examYear, concept };
 
   // Coming back from answering a question: refresh status badges in place
   // (keeps pagination and scroll position).
@@ -78,7 +95,7 @@ export default function BankScreen() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [school, topic, examYear, concept, page]);
+  }, [school, schoolCode, topic, examYear, concept, page]);
 
   // Reset to page 0 whenever a filter changes — kept inline (not via a
   // shared callback) with an `ignore` guard, per the standard "fetch on
@@ -92,7 +109,7 @@ export default function BankScreen() {
     Promise.resolve().then(() => {
       if (!ignore) setLoading(true);
     });
-    getBankPage({ school, topic, examYear, concept }, 0)
+    getBankPage({ school, schoolCode, topic, examYear, concept }, 0)
       .then(({ items: newItems, hasMore: more }) => {
         if (ignore) return;
         setItems(newItems);
@@ -113,7 +130,7 @@ export default function BankScreen() {
     return () => {
       ignore = true;
     };
-  }, [school, topic, examYear, concept]);
+  }, [school, schoolCode, topic, examYear, concept]);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -124,8 +141,21 @@ export default function BankScreen() {
           options={["all", "real", "template"] as const}
           labels={SCHOOL_LABELS}
           active={school}
-          onPick={(v) => { setSchool(v); if (v === "template") setExamYear("all"); }}
+          onPick={(v) => {
+            setSchool(v);
+            if (v !== "real") setSchoolCode("all");
+            if (v === "template") setExamYear("all");
+          }}
         />
+        {school === "real" && schools.length > 0 && (
+          <ChipRow
+            options={["all", ...schools] as const}
+            labels={{ all: "全部學校" }}
+            formatLabel={(v) => (v === "all" ? "全部學校" : schoolName(v))}
+            active={schoolCode}
+            onPick={setSchoolCode}
+          />
+        )}
         <ChipRow
           options={["all", "CS", "DS", "MIS"] as const}
           labels={TOPIC_LABELS}

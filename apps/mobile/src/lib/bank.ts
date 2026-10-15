@@ -9,9 +9,23 @@ export interface BankItem extends Question {
 
 export interface BankFilters {
   school: "all" | "real" | "template";
+  /** a specific school code (e.g. "NTU") when filtering real exam questions */
+  schoolCode: string | "all";
   topic: "all" | "CS" | "DS" | "MIS" | "STAT";
   examYear: number | "all";
   concept: string | "all";
+}
+
+const SCHOOL_ORDER = ["NTU", "NTHU", "NYCU", "NCKU", "NCCU", "NCU"]; // 臺清交成政, then 中央
+
+/** Schools that have real exam questions in the bank, 臺清交成政 order first. */
+export async function getBankSchools(): Promise<string[]> {
+  const rows = await fetchAll<{ school: string }>((from, to) =>
+    supabase.from("questions").select("school").neq("school", "template").not("school", "is", null)
+      .order("id").range(from, to).returns<{ school: string }[]>()
+  );
+  const rank = (s: string) => (SCHOOL_ORDER.includes(s) ? SCHOOL_ORDER.indexOf(s) : SCHOOL_ORDER.length);
+  return [...new Set(rows.map((r) => r.school))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 }
 
 const PAGE_SIZE = 20;
@@ -32,16 +46,12 @@ export async function getLatestAttempts(questionIds: number[]): Promise<Map<numb
   return latest;
 }
 
-export async function getBankYears(): Promise<number[]> {
-  const rows = await fetchAll<{ exam_year: number }>((from, to) =>
-    supabase
-      .from("questions")
-      .select("exam_year")
-      .not("exam_year", "is", null)
-      .order("id")
-      .range(from, to)
-      .returns<{ exam_year: number }[]>()
-  );
+export async function getBankYears(schoolCode: string | "all" = "all"): Promise<number[]> {
+  const rows = await fetchAll<{ exam_year: number }>((from, to) => {
+    let q = supabase.from("questions").select("exam_year").not("exam_year", "is", null);
+    if (schoolCode !== "all") q = q.eq("school", schoolCode);
+    return q.order("id").range(from, to).returns<{ exam_year: number }[]>();
+  });
   return [...new Set(rows.map((r) => r.exam_year))].sort((a, b) => b - a);
 }
 
@@ -76,6 +86,7 @@ export async function getBankPage(
 
   if (filters.school === "real") query = query.neq("school", "template");
   else if (filters.school === "template") query = query.eq("school", "template");
+  if (filters.school === "real" && filters.schoolCode !== "all") query = query.eq("school", filters.schoolCode);
 
   if (filters.topic !== "all") query = query.eq("topic", filters.topic);
   if (filters.examYear !== "all") query = query.eq("exam_year", filters.examYear);
