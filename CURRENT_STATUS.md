@@ -141,6 +141,7 @@ mis-grad-exam-coach/
 |---|---|---|---|
 | C1 | 批改付費後援 | Claude | ✅ 2026-10-15：Groq 失敗（含每分鐘 8,000 tokens 上限）自動改用 Gemini 付費 `gemini-3.1-flash-lite`；付費用量記在 `ai_usage_log`（不含使用者身分）；實測一次完整批改約 US$0.0015；緊急時可 `supabase secrets set GRADER_PRIMARY=gemini` 改成先用付費 |
 | C2 | 隱私權政策網頁（0-4）、刪除帳號說明網頁（0-3）的公開網址：Play Console「應用程式內容」與資料安全性表單必填 | 開發者決定放哪（T8），Claude 寫內容 | ✅ 2026-10-15（網址見 0-3、0-4） |
+| C3a | **App 內也要能開隱私權政策**（Google 使用者資料政策；2026-10-15 首次送審被退「隱私權政策找不到網頁」，網址本身正常，但通知列出「可從應用程式內存取」這條我們沒做到）：登入頁底部與首頁最底部加「隱私權政策 · 刪除帳號說明」（`components/LegalLinks.tsx`、網址集中在 `lib/links.ts`；帳號選單是系統對話框，Android 最多 3 個按鈕放不下）。要包進安裝檔（審查人員只開一次 App，OTA 第二次開才生效）→ versionCode 4 | Claude | ✅ 程式完成，重新打包中 |
 | C3 | Play Console 應用程式內容：資料安全性、內容分級問卷、目標對象（非兒童）、廣告（無）、**應用程式存取權**（需登入 → 提供一組審查用測試帳號） | 開發者（Claude 可提供填寫內容） | 進行中：應用程式存取權 ✅（審查帳號在 `.env` 的 `PLAY_REVIEW_EMAIL`／`PLAY_REVIEW_PASSWORD`，已實測可登入）；資料安全性已依下方答案填寫；剩內容分級、目標對象、廣告 |
 | C4 | 商店資訊：名稱、簡短／完整說明、512×512 圖示、1024×500 主題圖片、至少 2 張手機截圖。標題建議「考研教練－資管所題庫・AI 批改申論題」（見 6.2.8） | 開發者（Claude 可擬文案） | 未開始 |
 | C5 | 正式版打包：Play 需要 AAB（`eas build --profile production`），不是 APK；production 環境的 Supabase 設定已確認存在 | Claude | 未開始 |

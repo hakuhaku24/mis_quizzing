@@ -4,6 +4,7 @@ import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl, Alert } 
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LegalLinks } from "../../components/LegalLinks";
 import { getDailyTasks } from "../../lib/daily";
 import { getAnalytics } from "../../lib/analytics";
 import { deleteAccount, logout } from "../../lib/account";
@@ -219,6 +220,8 @@ export default function HomeScreen() {
             <Ionicons name="chevron-forward" size={16} color={colors.ink3} />
           </Pressable>
         )}
+
+        <LegalLinks />
       </ScrollView>
     </SafeAreaView>
   );

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { Redirect } from "expo-router";
+import { LegalLinks } from "../components/LegalLinks";
 import { useSession } from "../lib/useSession";
 import { supabase } from "../lib/supabase";
 import { colors, radius, spacing, typography } from "../lib/theme";
@@ -101,6 +102,9 @@ export default function LoginScreen() {
           </Pressable>
         )}
       </View>
+      <View style={styles.legal}>
+        <LegalLinks />
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -126,4 +130,5 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   switchText: { color: colors.accent2, fontSize: 12, textAlign: "center", fontWeight: "600" },
+  legal: { marginTop: spacing.md },
 });
