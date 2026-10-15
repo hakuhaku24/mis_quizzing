@@ -219,10 +219,11 @@ mis-grad-exam-coach/
 | T3 | 即時通知 | — | ❌ 2026-10-15 開發者決定先不做 Discord，只靠 Google 帳單預算提醒（email） |
 | T4 | Groq Developer 方案恢復開放時可再考慮升級（非必要） | 隨時 | 選擇性 |
 | T5 | OpenRouter 金鑰曾貼在對話中，有空重新產生一把再更新 `.env` | 有空時 | 選擇性 |
-| T6 | 待釐清 #1：Google Play 開發者帳號是否沿用補品日記那個、是否為 2023/11/13 後開的個人帳號 | 封測前 | 未回答 |
+| T6 | Google Play 開發者帳號類型 | 封測前 | 2026-10-15：個人開發者帳號 → 若為 2023/11/13 後開立，需 12 人連續 14 天封閉測試 |
 | T7 | 待釐清 #2：Apple 開發者帳號是否已申請 | iOS 上架前 | 未回答 |
-| T8 | 待釐清 #6：隱私權政策和刪除帳號說明網頁要放哪裡 | 做 0-3／0-4 之前 | 未回答 |
+| T8 | 隱私權政策和刪除帳號說明網頁 | 做 0-3／0-4 | 2026-10-15 決定用 GitHub Pages（另開公開 repo，例如 `kaoyan-coach-legal`）；內容已寫在 `projects/mis/kaoyan-coach-legal/`，聯絡信箱 hakuhakuu24@gmail.com；等開發者建好 repo 後推上去並開啟 Pages |
 | T9 | RevenueCat 串 Google Play 時，要在同一個 Google Cloud 專案建立 service account | 做付費功能時 | 之後 |
+| T12 | 把 App 的 repo（hakuhaku24/mis_quizzing）改成私有：目前公開，題庫資料庫與內部規劃都看得到（金鑰沒有外流，已檢查 git 歷史） | 有空時 | 等待中 |
 | T10 | 詳解裡誤寫成文字的「
 」 | — | ✅ 2026-10-15 修正 10 份（程式碼與 LaTeX 的 
  未動），`pipeline/jobs/fix_literal_newlines.py` |
