@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Pressable } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getAnalytics } from "../../lib/analytics";
+import { attemptBadge } from "../../lib/labels";
+import { stripMarkup } from "../../lib/text";
 import { colors, radius, spacing, typography, masteryColor } from "../../lib/theme";
-import type { Analytics } from "../../lib/types";
+import type { Analytics, BlindSpot } from "../../lib/types";
 
 const TOPIC_LABELS: Record<string, string> = { MIS: "管理資訊系統", DS: "資料結構", CS: "計算機概論" };
 
@@ -27,6 +29,8 @@ export default function AnalyticsScreen() {
           <Summary label="AI 批改" value={String(stats?.aiGraded ?? "—")} />
           <Summary label="AI 平均" value={stats?.avgAiScore != null ? stats.avgAiScore.toFixed(1) : "—"} accent />
         </View>
+
+        {stats && <BlindSpotCard items={stats.blindSpots} total={stats.blindSpotTotal} />}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>各科掌握度</Text>
@@ -57,6 +61,54 @@ export default function AnalyticsScreen() {
   );
 }
 
+/** 很有把握卻答錯 — the questions most likely to cost points on exam day. */
+function BlindSpotCard({ items, total }: { items: BlindSpot[]; total: number }) {
+  const router = useRouter();
+  return (
+    <View style={styles.card}>
+      <View style={styles.titleRow}>
+        <Text style={styles.cardTitle}>很有把握卻答錯</Text>
+        {total > 0 && (
+          <View style={styles.countPill}>
+            <Text style={styles.countPillText}>{total}</Text>
+          </View>
+        )}
+      </View>
+      {items.length === 0 ? (
+        <Text style={styles.cardHint}>
+          目前沒有。送出前選了「很有把握」、結果卻答錯的題目會出現在這裡，方便你考前優先複習。
+        </Text>
+      ) : (
+        <>
+          <Text style={styles.cardHint}>送出前你選了「很有把握」，結果卻答錯。這種題目考試時最容易失分，值得先複習。</Text>
+          {items.map((b) => {
+            // self-assessment overrides the AI score (as in scoring.ts), so show that mark
+            const badge = attemptBadge({ ...b, ai_score: b.self_assessment ? null : b.ai_score });
+            const where = [TOPIC_LABELS[b.topic ?? ""] ?? b.topic, b.subtopic].filter(Boolean).join(" · ");
+            return (
+              <Pressable
+                key={b.questionId}
+                style={styles.blindRow}
+                onPress={() => router.push(`/question/${b.questionId}?attempt=${b.attemptId}`)}
+              >
+                <View style={{ flex: 1, gap: 3 }}>
+                  {!!where && <Text style={styles.blindWhere}>{where}</Text>}
+                  <Text style={styles.blindText} numberOfLines={2}>{stripMarkup(b.questionText)}</Text>
+                </View>
+                <View style={[styles.blindBadge, { backgroundColor: badge.bg }]}>
+                  <Text style={[styles.blindBadgeText, { color: badge.color }]}>{badge.text}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+          {total > items.length && <Text style={styles.cardFoot}>另外還有 {total - items.length} 題</Text>}
+          <Text style={styles.blindFoot}>✓ 重寫答對，這題就會從清單移除</Text>
+        </>
+      )}
+    </View>
+  );
+}
+
 function Summary({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <View style={styles.summaryItem}>
@@ -76,6 +128,17 @@ const styles = StyleSheet.create({
   summaryValue: { fontSize: 19, fontWeight: "800", color: colors.ink },
   card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.md },
   cardTitle: { ...typography.h2 },
+  cardHint: { fontSize: 12.5, lineHeight: 20, color: colors.ink2 },
+  cardFoot: { fontSize: 12, color: colors.ink2 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  countPill: { minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: radius.full, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
+  countPillText: { fontSize: 12, fontWeight: "800", color: "#fff" },
+  blindRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 44, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: 14 },
+  blindWhere: { fontSize: 11.5, fontWeight: "700", color: colors.accent },
+  blindText: { fontSize: 13.5, lineHeight: 21, color: colors.ink },
+  blindBadge: { minWidth: 40, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignItems: "center" },
+  blindBadgeText: { fontSize: 13, fontWeight: "800" },
+  blindFoot: { fontSize: 12, fontWeight: "500", color: "#15803D" },
   empty: { color: colors.ink3, fontSize: 13 },
   barRow: { gap: 5 },
   barHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },

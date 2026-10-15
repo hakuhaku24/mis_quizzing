@@ -64,6 +64,18 @@ export interface TopicStat {
   ai_graded: number;
 }
 
+/** A question answered "很有把握" whose latest scored attempt was still wrong. */
+export interface BlindSpot {
+  questionId: number;
+  attemptId: number;
+  topic: string | null;
+  subtopic: string | null;
+  questionText: string;
+  is_correct: boolean | null;
+  ai_score: number | null;
+  self_assessment: string | null;
+}
+
 export interface Analytics {
   totalAttempts: number;
   aiGraded: number;
@@ -73,4 +85,7 @@ export interface Analytics {
   readiness: Readiness;
   /** All placed users' average readiness (0–100), null until enough users. */
   readinessAverage: number | null;
+  /** Most recent first, capped for display; blindSpotTotal is the full count. */
+  blindSpots: BlindSpot[];
+  blindSpotTotal: number;
 }

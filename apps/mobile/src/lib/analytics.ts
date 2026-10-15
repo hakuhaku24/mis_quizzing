@@ -1,7 +1,11 @@
 import { supabase } from "./supabase";
 import { fetchAll } from "./fetchAll";
-import { latestScores, readiness } from "./scoring";
-import type { Analytics, TopicStat } from "./types";
+import { attemptScore, latestScores, readiness } from "./scoring";
+import type { Analytics, BlindSpot, TopicStat } from "./types";
+
+const BLIND_SPOT_LIMIT = 5;
+/** Below this an answer counts as wrong — the same cut-off srs.ts uses. */
+const WRONG_BELOW = 0.4;
 
 export async function getAnalytics(): Promise<Analytics> {
   const { data: userData } = await supabase.auth.getUser();
@@ -9,20 +13,21 @@ export async function getAnalytics(): Promise<Analytics> {
   if (!userId) {
     return {
       totalAttempts: 0, aiGraded: 0, avgAiScore: null, topicStats: [], recentAttempts: [],
-      readiness: readiness(new Map()), readinessAverage: null,
+      readiness: readiness(new Map()), readinessAverage: null, blindSpots: [], blindSpotTotal: 0,
     };
   }
 
   type AttemptRow = {
-    question_id: number; is_correct: boolean | null; ai_score: number | null;
-    self_assessment: string | null; created_at: string; questions: { topic: string | null } | null;
+    id: number; question_id: number; is_correct: boolean | null; ai_score: number | null;
+    self_assessment: string | null; confidence: string | null; created_at: string;
+    questions: { topic: string | null } | null;
   };
   const [rows, { data: average }] = await Promise.all([
     // topic comes along via the join, so the whole question bank is never fetched
     fetchAll<AttemptRow>((from, to) =>
       supabase
         .from("user_attempts")
-        .select("question_id, is_correct, ai_score, self_assessment, created_at, questions(topic)")
+        .select("id, question_id, is_correct, ai_score, self_assessment, confidence, created_at, questions(topic)")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
@@ -63,6 +68,38 @@ export async function getAnalytics(): Promise<Analytics> {
     ai_graded: v.aiScores.length,
   }));
 
+  // 很有把握卻答錯: the latest scored attempt of a question was submitted as
+  // "很有把握" yet scored as wrong. Answering it right later replaces the
+  // latest attempt, so the question drops off the list by itself.
+  const latestAttempt = new Map<number, AttemptRow>();
+  for (const a of rows) {
+    // rows are newest first
+    if (!latestAttempt.has(a.question_id) && attemptScore(a) !== null) latestAttempt.set(a.question_id, a);
+  }
+  const blindRows = [...latestAttempt.values()].filter(
+    (a) => a.confidence === "high" && (attemptScore(a) ?? 1) < WRONG_BELOW
+  );
+  const shown = blindRows.slice(0, BLIND_SPOT_LIMIT);
+  const questionInfo = new Map<number, { question_text: string; subtopic: string | null }>();
+  if (shown.length) {
+    const { data } = await supabase
+      .from("questions")
+      .select("id, question_text, subtopic")
+      .in("id", shown.map((a) => a.question_id))
+      .returns<{ id: number; question_text: string; subtopic: string | null }[]>();
+    for (const q of data ?? []) questionInfo.set(q.id, q);
+  }
+  const blindSpots: BlindSpot[] = shown.map((a) => ({
+    questionId: a.question_id,
+    attemptId: a.id,
+    topic: a.questions?.topic ?? null,
+    subtopic: questionInfo.get(a.question_id)?.subtopic ?? null,
+    questionText: questionInfo.get(a.question_id)?.question_text ?? "",
+    is_correct: a.is_correct,
+    ai_score: a.ai_score,
+    self_assessment: a.self_assessment,
+  }));
+
   return {
     totalAttempts,
     aiGraded: aiScored.length,
@@ -71,6 +108,8 @@ export async function getAnalytics(): Promise<Analytics> {
     recentAttempts: rows.slice(0, 20).map((a) => ({ ai_score: a.ai_score, created_at: a.created_at })),
     readiness: readiness(latest),
     readinessAverage: typeof average === "number" ? average : null,
+    blindSpots,
+    blindSpotTotal: blindRows.length,
   };
 }
 
