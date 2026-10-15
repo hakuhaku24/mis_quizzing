@@ -79,7 +79,9 @@ export async function getBankPage(
 
   if (filters.topic !== "all") query = query.eq("topic", filters.topic);
   if (filters.examYear !== "all") query = query.eq("exam_year", filters.examYear);
-  if (filters.concept !== "all") query = query.contains("concepts", [filters.concept]);
+  // concepts is jsonb: containment needs a JSON array; a JS array is sent as a
+  // Postgres array literal ({...}) and the request fails with 22P02
+  if (filters.concept !== "all") query = query.contains("concepts", JSON.stringify([filters.concept]));
 
   const from = page * PAGE_SIZE;
   const { data, error } = await query

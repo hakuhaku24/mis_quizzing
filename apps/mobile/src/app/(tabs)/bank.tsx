@@ -22,6 +22,7 @@ export default function BankScreen() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     getBankYears().then(setYears);
@@ -71,6 +72,8 @@ export default function BankScreen() {
       setItems((prev) => [...prev, ...newItems]);
       setHasMore(more);
       setPage((p) => p + 1);
+    } catch {
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
@@ -95,6 +98,14 @@ export default function BankScreen() {
         setItems(newItems);
         setHasMore(more);
         setPage(0);
+        setLoadFailed(false);
+      })
+      .catch(() => {
+        // never leave the previous filter's list on screen as if it were the answer
+        if (ignore) return;
+        setItems([]);
+        setHasMore(false);
+        setLoadFailed(true);
       })
       .finally(() => {
         if (!ignore) setLoading(false);
@@ -147,7 +158,11 @@ export default function BankScreen() {
         onEndReachedThreshold={0.4}
         onEndReached={() => { if (hasMore && !loading) loadMore(); }}
         ListEmptyComponent={
-          loading ? <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} /> : <Text style={styles.empty}>沒有符合條件的題目</Text>
+          loading ? (
+            <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
+          ) : (
+            <Text style={styles.empty}>{loadFailed ? "載入失敗，請換個條件或稍後再試" : "沒有符合條件的題目"}</Text>
+          )
         }
         ListFooterComponent={loading && items.length > 0 ? <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} /> : null}
         renderItem={({ item }) => (
