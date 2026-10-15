@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { fetchAll } from "./fetchAll";
 import type { AttemptOutcome } from "./labels";
 import type { Question } from "./types";
 
@@ -32,12 +33,16 @@ export async function getLatestAttempts(questionIds: number[]): Promise<Map<numb
 }
 
 export async function getBankYears(): Promise<number[]> {
-  const { data } = await supabase
-    .from("questions")
-    .select("exam_year")
-    .not("exam_year", "is", null)
-    .order("exam_year", { ascending: false });
-  return [...new Set((data ?? []).map((r) => r.exam_year as number))];
+  const rows = await fetchAll<{ exam_year: number }>((from, to) =>
+    supabase
+      .from("questions")
+      .select("exam_year")
+      .not("exam_year", "is", null)
+      .order("id")
+      .range(from, to)
+      .returns<{ exam_year: number }[]>()
+  );
+  return [...new Set(rows.map((r) => r.exam_year))].sort((a, b) => b - a);
 }
 
 /** Concept tags for a given topic, most-used first (capped — the long tail
@@ -45,9 +50,12 @@ export async function getBankYears(): Promise<number[]> {
  *  only make sense once you've narrowed to one subject. */
 export async function getBankConcepts(topic: BankFilters["topic"]): Promise<string[]> {
   if (topic === "all") return [];
-  const { data } = await supabase.from("questions").select("concepts").eq("topic", topic);
+  const rows = await fetchAll<{ concepts: string[] | null }>((from, to) =>
+    supabase.from("questions").select("concepts").eq("topic", topic).order("id").range(from, to)
+      .returns<{ concepts: string[] | null }[]>()
+  );
   const counts = new Map<string, number>();
-  for (const row of data ?? []) {
+  for (const row of rows) {
     for (const c of (row.concepts as string[] | null) ?? []) {
       counts.set(c, (counts.get(c) ?? 0) + 1);
     }

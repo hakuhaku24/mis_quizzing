@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { fetchAll } from "./fetchAll";
 import { latestScores, readiness } from "./scoring";
 import type { Analytics, TopicStat } from "./types";
 
@@ -12,19 +13,27 @@ export async function getAnalytics(): Promise<Analytics> {
     };
   }
 
-  const [{ data: attempts }, { data: questions }, { data: average }] = await Promise.all([
-    supabase
-      .from("user_attempts")
-      .select("question_id, is_correct, ai_score, self_assessment, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false }),
-    supabase.from("questions").select("id, topic"),
+  type AttemptRow = {
+    question_id: number; is_correct: boolean | null; ai_score: number | null;
+    self_assessment: string | null; created_at: string; questions: { topic: string | null } | null;
+  };
+  const [rows, { data: average }] = await Promise.all([
+    // topic comes along via the join, so the whole question bank is never fetched
+    fetchAll<AttemptRow>((from, to) =>
+      supabase
+        .from("user_attempts")
+        .select("question_id, is_correct, ai_score, self_assessment, created_at, questions(topic)")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to)
+        .returns<AttemptRow[]>()
+    ),
     // null until enough users are placed (see migration 004)
     supabase.rpc("readiness_average"),
   ]);
-  const topicById = new Map((questions ?? []).map((q) => [q.id, q.topic]));
+  const topicById = new Map(rows.map((a) => [a.question_id, a.questions?.topic ?? null]));
 
-  const rows = attempts ?? [];
   const totalAttempts = rows.length;
   const aiScored = rows.filter((a) => a.ai_score !== null);
   const avgAiScore = aiScored.length

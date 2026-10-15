@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
+import { fetchAll } from "./fetchAll";
 import { GRADUATE_AT, latestScores, taiwanDate, type ScorableAttempt } from "./scoring";
 import type { DailyItem, Question, Slot } from "./types";
 
@@ -29,11 +30,15 @@ export async function getDailyTasks(): Promise<DailyItem[]> {
   if (!userId) return [];
 
   const today = taiwanDate();
-  const { data: attemptRows } = await supabase
-    .from("user_attempts")
-    .select("id, question_id, is_correct, ai_score, self_assessment, created_at")
-    .eq("user_id", userId);
-  const attempts = (attemptRows ?? []) as (ScorableAttempt & { id: number })[];
+  const attempts = await fetchAll<ScorableAttempt & { id: number }>((from, to) =>
+    supabase
+      .from("user_attempts")
+      .select("id, question_id, is_correct, ai_score, self_assessment, created_at")
+      .eq("user_id", userId)
+      .order("id")
+      .range(from, to)
+      .returns<(ScorableAttempt & { id: number })[]>()
+  );
   const latest = latestScores(attempts);
 
   // question_id -> latest attempt id made today (Taiwan time)
@@ -50,8 +55,9 @@ export async function getDailyTasks(): Promise<DailyItem[]> {
     today_attempt_id: attemptedToday.get(q.id) ?? null,
   });
 
-  const { data: questionRows } = await supabase.from("questions").select(QUESTION_COLUMNS).in("topic", DAILY_TOPICS);
-  const questions = (questionRows ?? []) as Question[];
+  const questions = await fetchAll<Question>((from, to) =>
+    supabase.from("questions").select(QUESTION_COLUMNS).in("topic", DAILY_TOPICS).order("id").range(from, to).returns<Question[]>()
+  );
   const byId = new Map(questions.map((q) => [q.id, q]));
 
   let cached: CachedDaily | null = null;
@@ -64,11 +70,17 @@ export async function getDailyTasks(): Promise<DailyItem[]> {
 
   let plan = cached?.date === today ? cached.items : null;
   if (!plan) {
-    const { data: states } = await supabase
-      .from("user_question_states")
-      .select("question_id, next_review_at")
-      .eq("user_id", userId);
-    plan = planDay(questions, attempts, latest, states ?? []);
+    type StateRow = { question_id: number; next_review_at: string | null };
+    const states = await fetchAll<StateRow>((from, to) =>
+      supabase
+        .from("user_question_states")
+        .select("question_id, next_review_at")
+        .eq("user_id", userId)
+        .order("id")
+        .range(from, to)
+        .returns<StateRow[]>()
+    );
+    plan = planDay(questions, attempts, latest, states);
     try {
       await AsyncStorage.setItem(cacheKey(userId), JSON.stringify({ date: today, items: plan } satisfies CachedDaily));
     } catch {
