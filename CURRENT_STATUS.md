@@ -201,7 +201,7 @@ mis-grad-exam-coach/
 | # | 待辦（需要開發者本人操作或決定） | 何時要完成 | 狀態 |
 |---|---|---|---|
 | T1 | 決定第 389 題（內部碎片）的正確答案 | 寫入複選題修正前 | ✅ C、D |
-| T2 | 建立「考研教練」專用的 Google Cloud 專案＋綁定帳單＋設預算提醒（50%／90%，範圍限定這個專案），在這個專案建立付費 Gemini 金鑰，自己貼進 `.env`（`GEMINI_PAID_API_KEY`） | 批改改用付費後援之前 | 等待中 |
+| T2 | 照 6.2.6 建立「考研教練」專用專案、開付費、設上限，付費金鑰自己貼進 `.env`（`GEMINI_PAID_API_KEY`）；**並確認舊免費金鑰的專案 494657705930 在 AI Studio 仍顯示 Free tier**（若被開了付費，那把「免費」金鑰會開始扣款） | 批改改用付費後援之前 | 等待中 |
 | T3 | 即時通知選 **Discord**：建立伺服器與頻道 webhook，網址自己貼進 `.env`（`DISCORD_WEBHOOK_URL`） | 做付費提醒功能時 | 已選 Discord，待建立 webhook |
 | T4 | Groq Developer 方案恢復開放時可再考慮升級（非必要） | 隨時 | 選擇性 |
 | T5 | OpenRouter 金鑰曾貼在對話中，有空重新產生一把再更新 `.env` | 有空時 | 選擇性 |
@@ -212,6 +212,24 @@ mis-grad-exam-coach/
 | T10 | 決定是否修正約 10 份詳解裡誤寫成文字的「
 」（字面反斜線 n，App 會直接顯示；程式碼與 LaTeX 的 
  不能動） | 有空時 | 等待決定 |
+
+### 6.2.6 設定教學（開發者照做）
+
+**A. Google Cloud 專案＋Gemini 付費金鑰（依 Gemini API 官方帳單說明，2026-10-15 查證）**
+1. 打開 AI Studio 的 Projects 頁（aistudio.google.com/projects），建立新專案，名稱建議「考研教練」。
+2. 在這個專案那一列的 Billing Tier 欄按 **Set up billing**，選你已經建好的帳單帳戶，方案選 **Prepay**（最低 5 美元）。
+3. Billing 頁的 Available credits 卡片：設定自動儲值（低於 NT$150 補值）時，**一定要同時設定「每月自動扣款上限」**（Monthly auto-charge limit，NT$600）；超過上限當月就不會再自動儲值。
+4. Spend 頁：Monthly spend cap → Edit spend cap，設成 NT$600 左右（官方標示為實驗功能，約有 10 分鐘延遲）。
+5. API keys 頁（aistudio.google.com/api-keys）：Create API key → 選「考研教練」專案 → 複製。
+6. 打開專案根目錄的 `.env`，新增一行 `GEMINI_PAID_API_KEY=貼上金鑰`（不要貼在對話裡）。
+7. 回到 Projects 頁檢查：「考研教練」顯示付費等級；舊金鑰的專案（494657705930）**仍是 Free tier**。
+- 餘額用完時，付費金鑰會回 HTTP 402，批改會改顯示錯誤訊息，不會自動透支。
+
+**B. Discord 通知**
+1. Discord 左側「＋」→ 自己建立 → 建立伺服器（例如「考研教練通知」）。
+2. 在一個文字頻道按齒輪（編輯頻道）→ 整合 → Webhook → 新 Webhook → 複製 Webhook 網址。
+3. 在 `.env` 新增 `DISCORD_WEBHOOK_URL=貼上網址`。這個網址等同密碼，任何人拿到都能往頻道發訊息。
+4. 告訴 Claude，Claude 會先傳一則測試訊息確認。
 
 ### 6.3 批改 prompt 要加的規則
 
