@@ -4,9 +4,11 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ErrorReasonsCard } from "../../components/ErrorReasonsCard";
 import { KnowledgeMap } from "../../components/KnowledgeMap";
+import { ReadinessCard } from "../../components/ReadinessDial";
 import { UnitSheet } from "../../components/UnitSheet";
 import { getAnalytics } from "../../lib/analytics";
 import { attemptBadge, subjectName } from "../../lib/labels";
+import { PLACEMENT_QUESTIONS } from "../../lib/scoring";
 import { stripMarkup } from "../../lib/text";
 import { colors, radius, spacing, typography, masteryColor } from "../../lib/theme";
 import type { Analytics, BlindSpot, UnitStat } from "../../lib/types";
@@ -27,11 +29,17 @@ export default function AnalyticsScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
       >
-        <View style={styles.summaryRow}>
-          <Summary label="總作答" value={String(stats?.totalAttempts ?? "—")} />
-          <Summary label="AI 批改" value={String(stats?.aiGraded ?? "—")} />
-          <Summary label="AI 平均" value={stats?.avgAiScore != null ? stats.avgAiScore.toFixed(1) : "—"} accent />
-        </View>
+        {stats && (
+          <ReadinessCard
+            percent={stats.readiness.percent}
+            missing={Math.max(0, PLACEMENT_QUESTIONS - stats.readiness.scoredQuestions)}
+            average={stats.readinessAverage}
+            questionsAnswered={stats.questionsAnswered}
+            totalAttempts={stats.totalAttempts}
+            aiGraded={stats.aiGraded}
+            avgAiScore={stats.avgAiScore}
+          />
+        )}
 
         {stats && <KnowledgeMap subjects={stats.knowledgeMap} onOpenUnit={setOpenUnit} />}
 
@@ -117,23 +125,10 @@ function BlindSpotCard({ items, total }: { items: BlindSpot[]; total: number }) 
   );
 }
 
-function Summary({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <View style={styles.summaryItem}>
-      <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={[styles.summaryValue, accent && { color: colors.accent }]}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.ground },
   title: { ...typography.h1, paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.sm },
   content: { padding: spacing.xl, paddingTop: 0, gap: spacing.lg, paddingBottom: spacing.xxl },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: spacing.lg },
-  summaryItem: { gap: 2 },
-  summaryLabel: { fontSize: 11, color: colors.ink3 },
-  summaryValue: { fontSize: 19, fontWeight: "800", color: colors.ink },
   card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.md },
   cardTitle: { ...typography.h2 },
   cardHint: { fontSize: 12.5, lineHeight: 20, color: colors.ink2 },

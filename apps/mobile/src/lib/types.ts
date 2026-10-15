@@ -110,6 +110,8 @@ export interface BlindSpot {
 
 export interface Analytics {
   totalAttempts: number;
+  /** distinct questions attempted at least once */
+  questionsAnswered: number;
   aiGraded: number;
   avgAiScore: number | null;
   topicStats: TopicStat[];

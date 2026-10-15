@@ -69,7 +69,7 @@ export async function getAnalytics(): Promise<Analytics> {
   const userId = userData.user?.id;
   if (!userId) {
     return {
-      totalAttempts: 0, aiGraded: 0, avgAiScore: null, topicStats: [], recentAttempts: [],
+      totalAttempts: 0, questionsAnswered: 0, aiGraded: 0, avgAiScore: null, topicStats: [], recentAttempts: [],
       readiness: readiness(new Map()), readinessAverage: null, blindSpots: [], blindSpotTotal: 0, knowledgeMap: [],
       errorReasons: null,
     };
@@ -164,6 +164,7 @@ export async function getAnalytics(): Promise<Analytics> {
 
   return {
     totalAttempts,
+    questionsAnswered: new Set(rows.map((a) => a.question_id)).size,
     aiGraded: aiScored.length,
     avgAiScore,
     topicStats,
