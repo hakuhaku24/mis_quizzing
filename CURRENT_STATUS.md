@@ -226,6 +226,7 @@ mis-grad-exam-coach/
 | T7 | 待釐清 #2：Apple 開發者帳號是否已申請 | iOS 上架前 | 未回答 |
 | T8 | 隱私權政策和刪除帳號說明網頁 | 做 0-3／0-4 | ✅ 2026-10-15 GitHub Pages 上線（repo `hakuhaku24/kaoyan-coach-legal`，聯絡信箱 hakuhakuu24@gmail.com） |
 | T9 | RevenueCat 串 Google Play 時，要在同一個 Google Cloud 專案建立 service account | 做付費功能時 | 之後 |
+| T13 | 自訂寄信服務（SMTP）：Supabase 內建寄信每小時 2 封、且只寄給專案團隊成員，**測試者／使用者的「忘記密碼」信寄不出去**（註冊不受影響：`mailer_autoconfirm` 已開，不需驗證信）。接 Resend 免費方案或 Gmail 應用程式密碼，在 Supabase → Authentication → SMTP 設定；`site_url` 目前還是 `http://localhost:3000`，順便確認重設密碼的導回網址 | 正式上架前 | 待辦（封測期間忘記密碼的人由開發者在 Supabase 後台協助重設） |
 | T12 | 把 App 的 repo（hakuhaku24/mis_quizzing）改成私有：目前公開，題庫資料庫與內部規劃都看得到（金鑰沒有外流，已檢查 git 歷史） | 有空時 | 等待中 |
 | T10 | 詳解裡誤寫成文字的「`\n`」（字面反斜線 n，App 會直接顯示） | — | ✅ 2026-10-15 修正 10 份（程式碼與 LaTeX 裡的 `\n` 不能動，未動），`pipeline/jobs/fix_literal_newlines.py` |
 | T11 | 中央缺圖題（254、256、285、286、307、362） | — | ✅ 2026-10-15 修好：重新 OCR 把圖轉成文字，**全部對照原卷圖片人工核對**（286 的 AI 轉錄是錯的，改用人工讀出的邊）；285、362 的 AI 詳解算錯，已依程式驗算重寫 |
