@@ -2,7 +2,7 @@ import { supabase } from "./supabase";
 import { fetchAll } from "./fetchAll";
 import { compareSubjects } from "./labels";
 import { attemptScore, GRADUATE_AT, latestScores, readiness, type ScorableAttempt } from "./scoring";
-import type { Analytics, BlindSpot, SubjectMap, TopicStat, UnitStat } from "./types";
+import type { Analytics, BlindSpot, ErrorReasons, ErrorType, SubjectMap, TopicStat, UnitStat } from "./types";
 
 const BLIND_SPOT_LIMIT = 5;
 /** Below this an answer counts as wrong — the same cut-off srs.ts uses. */
@@ -12,6 +12,9 @@ const MIN_UNIT_QUESTIONS = 3;
 /** One wrong answer isn't enough to call a unit the one to fix first. */
 const FOCUS_MIN_ANSWERED = 2;
 const PENDING_LIMIT = 3;
+/** Fewer recorded 錯誤原因 than this and the percentages would just be noise. */
+const MIN_ERROR_REASONS = 5;
+const ERROR_TYPES: ErrorType[] = ["concept", "memory", "careless", "unseen"];
 
 type BankRow = { id: number; topic: string | null; subtopic: string | null };
 type LatestAttempt = ScorableAttempt & { id: number };
@@ -68,12 +71,13 @@ export async function getAnalytics(): Promise<Analytics> {
     return {
       totalAttempts: 0, aiGraded: 0, avgAiScore: null, topicStats: [], recentAttempts: [],
       readiness: readiness(new Map()), readinessAverage: null, blindSpots: [], blindSpotTotal: 0, knowledgeMap: [],
+      errorReasons: null,
     };
   }
 
   type AttemptRow = {
     id: number; question_id: number; is_correct: boolean | null; ai_score: number | null;
-    self_assessment: string | null; confidence: string | null; created_at: string;
+    self_assessment: string | null; confidence: string | null; error_type: ErrorType | null; created_at: string;
     questions: { topic: string | null } | null;
   };
   const [rows, bank, { data: average }] = await Promise.all([
@@ -81,7 +85,7 @@ export async function getAnalytics(): Promise<Analytics> {
     fetchAll<AttemptRow>((from, to) =>
       supabase
         .from("user_attempts")
-        .select("id, question_id, is_correct, ai_score, self_assessment, confidence, created_at, questions(topic)")
+        .select("id, question_id, is_correct, ai_score, self_assessment, confidence, error_type, created_at, questions(topic)")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
@@ -169,7 +173,23 @@ export async function getAnalytics(): Promise<Analytics> {
     blindSpots,
     blindSpotTotal: blindRows.length,
     knowledgeMap: buildKnowledgeMap(bank, latestAttempt),
+    errorReasons: countErrorReasons(rows),
   };
+}
+
+/** Every attempt the student tagged with a 錯誤原因 counts once — it's a record
+ *  of how points were lost, even on questions answered right since. */
+function countErrorReasons(rows: { error_type: ErrorType | null }[]): ErrorReasons | null {
+  const counts = new Map<ErrorType, number>();
+  for (const r of rows) {
+    if (r.error_type && ERROR_TYPES.includes(r.error_type)) counts.set(r.error_type, (counts.get(r.error_type) ?? 0) + 1);
+  }
+  const total = [...counts.values()].reduce((s, n) => s + n, 0);
+  if (total < MIN_ERROR_REASONS) return null;
+  const items = ERROR_TYPES.filter((t) => counts.has(t))
+    .map((type) => ({ type, count: counts.get(type)! }))
+    .sort((a, b) => b.count - a.count); // stable: ties keep ERROR_TYPES order
+  return { total, items };
 }
 
 /** Question text for the unit sheet's list, fetched only when it opens. */

@@ -33,6 +33,8 @@ export function subjectShortName(topic: string): string {
   return SUBJECTS[topic]?.short ?? topic;
 }
 
+export const ERROR_TYPE_LABELS: Record<string, string> = { concept: "觀念不懂", memory: "記憶模糊", careless: "粗心", unseen: "沒看過" };
+
 /** Known subjects in their usual order, then any others alphabetically. */
 export function compareSubjects(a: string, b: string): number {
   const rank = (t: string) => (SUBJECT_ORDER.includes(t) ? SUBJECT_ORDER.indexOf(t) : SUBJECT_ORDER.length);

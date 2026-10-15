@@ -89,6 +89,13 @@ export interface SubjectMap {
   focus: UnitStat | null;
 }
 
+/** How the student loses points, from the 錯誤原因 they picked after wrong answers. */
+export interface ErrorReasons {
+  total: number;
+  /** most common first; reasons never picked are left out */
+  items: { type: ErrorType; count: number }[];
+}
+
 /** A question answered "很有把握" whose latest scored attempt was still wrong. */
 export interface BlindSpot {
   questionId: number;
@@ -114,4 +121,6 @@ export interface Analytics {
   blindSpots: BlindSpot[];
   blindSpotTotal: number;
   knowledgeMap: SubjectMap[];
+  /** null until enough reasons are recorded to say anything */
+  errorReasons: ErrorReasons | null;
 }

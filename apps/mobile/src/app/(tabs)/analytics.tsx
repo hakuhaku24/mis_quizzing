@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, RefreshControl, Pressable } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ErrorReasonsCard } from "../../components/ErrorReasonsCard";
 import { KnowledgeMap } from "../../components/KnowledgeMap";
 import { UnitSheet } from "../../components/UnitSheet";
 import { getAnalytics } from "../../lib/analytics";
@@ -35,6 +36,8 @@ export default function AnalyticsScreen() {
         {stats && <KnowledgeMap subjects={stats.knowledgeMap} onOpenUnit={setOpenUnit} />}
 
         {stats && <BlindSpotCard items={stats.blindSpots} total={stats.blindSpotTotal} />}
+
+        {stats?.errorReasons && <ErrorReasonsCard data={stats.errorReasons} />}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>各科掌握度</Text>
