@@ -1,4 +1,5 @@
 import type { Readiness } from "./scoring";
+import type { AttemptOutcome } from "./labels";
 
 export type QuestionType = "essay" | "short_answer" | "multiple_choice" | "calculation";
 export type Confidence = "low" | "medium" | "high";
@@ -64,6 +65,30 @@ export interface TopicStat {
   ai_graded: number;
 }
 
+/** One unit (questions.subtopic) of one subject on the 知識地圖. */
+export interface UnitStat {
+  topic: string;
+  unit: string;
+  /** questions in the bank — decides tile size, never shown as a number */
+  questionCount: number;
+  /** questions with a scored latest attempt */
+  answered: number;
+  /** of those, latest score at or above GRADUATE_AT */
+  correct: number;
+  /** mean latest score (0–1), null when nothing answered yet */
+  mastery: number | null;
+  /** answered but not yet right, newest first (a few, for the unit sheet) */
+  pending: { questionId: number; attemptId: number; outcome: AttemptOutcome }[];
+}
+
+export interface SubjectMap {
+  topic: string;
+  /** biggest units first */
+  units: UnitStat[];
+  /** the unit most worth fixing in this subject, if any */
+  focus: UnitStat | null;
+}
+
 /** A question answered "很有把握" whose latest scored attempt was still wrong. */
 export interface BlindSpot {
   questionId: number;
@@ -88,4 +113,5 @@ export interface Analytics {
   /** Most recent first, capped for display; blindSpotTotal is the full count. */
   blindSpots: BlindSpot[];
   blindSpotTotal: number;
+  knowledgeMap: SubjectMap[];
 }

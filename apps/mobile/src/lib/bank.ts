@@ -14,6 +14,8 @@ export interface BankFilters {
   topic: "all" | "CS" | "DS" | "MIS" | "STAT";
   examYear: number | "all";
   concept: string | "all";
+  /** a unit (questions.subtopic), set from the 知識地圖's "練這個單元" */
+  subtopic: string | "all";
 }
 
 const SCHOOL_ORDER = ["NTU", "NTHU", "NYCU", "NCKU", "NCCU", "NCU"]; // 臺清交成政, then 中央
@@ -93,6 +95,7 @@ export async function getBankPage(
   // concepts is jsonb: containment needs a JSON array; a JS array is sent as a
   // Postgres array literal ({...}) and the request fails with 22P02
   if (filters.concept !== "all") query = query.contains("concepts", JSON.stringify([filters.concept]));
+  if (filters.subtopic !== "all") query = query.eq("subtopic", filters.subtopic);
 
   const from = page * PAGE_SIZE;
   const { data, error } = await query

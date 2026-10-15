@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getBankConcepts, getBankPage, getBankSchools, getBankYears, getLatestAttempts, type BankFilters, type BankItem } from "../../lib/bank";
 import { attemptBadge, schoolName, sourceLabel, type AttemptOutcome } from "../../lib/labels";
@@ -18,6 +18,7 @@ export default function BankScreen() {
   const [topic, setTopic] = useState<BankFilters["topic"]>("all");
   const [examYear, setExamYear] = useState<BankFilters["examYear"]>("all");
   const [concept, setConcept] = useState<BankFilters["concept"]>("all");
+  const [subtopic, setSubtopic] = useState<BankFilters["subtopic"]>("all");
   const [years, setYears] = useState<number[]>([]);
   const [concepts, setConcepts] = useState<string[]>([]);
   const [items, setItems] = useState<BankItem[]>([]);
@@ -25,6 +26,21 @@ export default function BankScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+
+  // Arriving from the 知識地圖's "練這個單元": show just that unit. `at` changes
+  // on every tap, so picking the same unit again re-applies the filter.
+  // (Adjusting state while rendering, React's pattern for reacting to new props.)
+  const params = useLocalSearchParams<{ topic?: string; unit?: string; at?: string }>();
+  const [appliedAt, setAppliedAt] = useState<string | undefined>(undefined);
+  if (params.at && params.at !== appliedAt && params.topic && params.unit) {
+    setAppliedAt(params.at);
+    setSchool("all");
+    setSchoolCode("all");
+    setExamYear("all");
+    setConcept("all");
+    setTopic(params.topic as BankFilters["topic"]);
+    setSubtopic(params.unit);
+  }
 
   useEffect(() => {
     getBankSchools().then(setSchools).catch(() => setSchools([]));
@@ -57,7 +73,7 @@ export default function BankScreen() {
     };
   }, [topic]);
 
-  const filters: BankFilters = { school, schoolCode, topic, examYear, concept };
+  const filters: BankFilters = { school, schoolCode, topic, examYear, concept, subtopic };
 
   // Coming back from answering a question: refresh status badges in place
   // (keeps pagination and scroll position).
@@ -95,7 +111,7 @@ export default function BankScreen() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [school, schoolCode, topic, examYear, concept, page]);
+  }, [school, schoolCode, topic, examYear, concept, subtopic, page]);
 
   // Reset to page 0 whenever a filter changes — kept inline (not via a
   // shared callback) with an `ignore` guard, per the standard "fetch on
@@ -109,7 +125,7 @@ export default function BankScreen() {
     Promise.resolve().then(() => {
       if (!ignore) setLoading(true);
     });
-    getBankPage({ school, schoolCode, topic, examYear, concept }, 0)
+    getBankPage({ school, schoolCode, topic, examYear, concept, subtopic }, 0)
       .then(({ items: newItems, hasMore: more }) => {
         if (ignore) return;
         setItems(newItems);
@@ -130,7 +146,7 @@ export default function BankScreen() {
     return () => {
       ignore = true;
     };
-  }, [school, schoolCode, topic, examYear, concept]);
+  }, [school, schoolCode, topic, examYear, concept, subtopic]);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -160,8 +176,18 @@ export default function BankScreen() {
           options={["all", "CS", "DS", "MIS"] as const}
           labels={TOPIC_LABELS}
           active={topic}
-          onPick={(v) => { setTopic(v); setConcept("all"); }}
+          onPick={(v) => { setTopic(v); setConcept("all"); setSubtopic("all"); }}
         />
+        {subtopic !== "all" && (
+          <Pressable
+            style={[styles.chip, styles.chipActive, styles.unitChip]}
+            onPress={() => setSubtopic("all")}
+            accessibilityRole="button"
+            accessibilityLabel={`取消單元篩選：${subtopic}`}
+          >
+            <Text style={[styles.chipText, styles.chipTextActive]}>單元：{subtopic}  ✕</Text>
+          </Pressable>
+        )}
         {concepts.length > 0 && (
           <ChipRow
             options={["all", ...concepts] as const}
@@ -258,6 +284,7 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { fontSize: 12, fontWeight: "600", color: colors.ink2 },
   chipTextActive: { color: "#fff", fontWeight: "700" },
+  unitChip: { alignSelf: "flex-start" },
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl, gap: spacing.sm },
   empty: { textAlign: "center", color: colors.ink3, paddingVertical: spacing.xxl },
   row: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.md, gap: 6 },

@@ -1,11 +1,65 @@
 import { supabase } from "./supabase";
 import { fetchAll } from "./fetchAll";
-import { attemptScore, latestScores, readiness } from "./scoring";
-import type { Analytics, BlindSpot, TopicStat } from "./types";
+import { compareSubjects } from "./labels";
+import { attemptScore, GRADUATE_AT, latestScores, readiness, type ScorableAttempt } from "./scoring";
+import type { Analytics, BlindSpot, SubjectMap, TopicStat, UnitStat } from "./types";
 
 const BLIND_SPOT_LIMIT = 5;
 /** Below this an answer counts as wrong — the same cut-off srs.ts uses. */
 const WRONG_BELOW = 0.4;
+/** Units with fewer bank questions don't get their own tile on the 知識地圖. */
+const MIN_UNIT_QUESTIONS = 3;
+/** One wrong answer isn't enough to call a unit the one to fix first. */
+const FOCUS_MIN_ANSWERED = 2;
+const PENDING_LIMIT = 3;
+
+type BankRow = { id: number; topic: string | null; subtopic: string | null };
+type LatestAttempt = ScorableAttempt & { id: number };
+
+/**
+ * 知識地圖: every unit of every subject, built from the bank itself so any
+ * department's subjects work unchanged. Mastery is the mean latest score of
+ * the unit's answered questions; the focus unit is the one where improving
+ * pays most — weak mastery weighted by how many questions the unit has.
+ */
+function buildKnowledgeMap(bank: BankRow[], latestAttempt: Map<number, LatestAttempt>): SubjectMap[] {
+  const units = new Map<string, UnitStat & { scoreSum: number }>();
+  for (const q of bank) {
+    if (!q.topic || !q.subtopic) continue;
+    const key = `${q.topic}\u0000${q.subtopic}`;
+    let u = units.get(key);
+    if (!u) {
+      u = { topic: q.topic, unit: q.subtopic, questionCount: 0, answered: 0, correct: 0, mastery: null, pending: [], scoreSum: 0 };
+      units.set(key, u);
+    }
+    u.questionCount += 1;
+    const a = latestAttempt.get(q.id);
+    const score = a ? attemptScore(a) : null;
+    if (!a || score === null) continue;
+    u.answered += 1;
+    u.scoreSum += score;
+    if (score >= GRADUATE_AT) u.correct += 1;
+    else u.pending.push({ questionId: q.id, attemptId: a.id, outcome: { is_correct: a.is_correct, ai_score: a.ai_score, self_assessment: a.self_assessment } });
+  }
+
+  const bySubject = new Map<string, UnitStat[]>();
+  for (const { scoreSum, ...u } of units.values()) {
+    if (u.questionCount < MIN_UNIT_QUESTIONS) continue;
+    u.mastery = u.answered ? scoreSum / u.answered : null;
+    u.pending = u.pending.sort((x, y) => y.attemptId - x.attemptId).slice(0, PENDING_LIMIT);
+    bySubject.set(u.topic, [...(bySubject.get(u.topic) ?? []), u]);
+  }
+
+  return [...bySubject.entries()]
+    .sort(([a], [b]) => compareSubjects(a, b))
+    .map(([topic, list]) => {
+      list.sort((a, b) => b.questionCount - a.questionCount || a.unit.localeCompare(b.unit));
+      const weak = list.filter((u) => u.answered >= FOCUS_MIN_ANSWERED && u.mastery !== null && u.mastery < GRADUATE_AT);
+      const priority = (u: UnitStat) => (1 - (u.mastery ?? 1)) * u.questionCount;
+      const focus = weak.sort((a, b) => priority(b) - priority(a))[0] ?? null;
+      return { topic, units: list, focus };
+    });
+}
 
 export async function getAnalytics(): Promise<Analytics> {
   const { data: userData } = await supabase.auth.getUser();
@@ -13,7 +67,7 @@ export async function getAnalytics(): Promise<Analytics> {
   if (!userId) {
     return {
       totalAttempts: 0, aiGraded: 0, avgAiScore: null, topicStats: [], recentAttempts: [],
-      readiness: readiness(new Map()), readinessAverage: null, blindSpots: [], blindSpotTotal: 0,
+      readiness: readiness(new Map()), readinessAverage: null, blindSpots: [], blindSpotTotal: 0, knowledgeMap: [],
     };
   }
 
@@ -22,8 +76,8 @@ export async function getAnalytics(): Promise<Analytics> {
     self_assessment: string | null; confidence: string | null; created_at: string;
     questions: { topic: string | null } | null;
   };
-  const [rows, { data: average }] = await Promise.all([
-    // topic comes along via the join, so the whole question bank is never fetched
+  const [rows, bank, { data: average }] = await Promise.all([
+    // topic comes along via the join
     fetchAll<AttemptRow>((from, to) =>
       supabase
         .from("user_attempts")
@@ -33,6 +87,10 @@ export async function getAnalytics(): Promise<Analytics> {
         .order("id", { ascending: false })
         .range(from, to)
         .returns<AttemptRow[]>()
+    ),
+    // just id/topic/subtopic of every question, for the 知識地圖's units
+    fetchAll<BankRow>((from, to) =>
+      supabase.from("questions").select("id, topic, subtopic").order("id").range(from, to).returns<BankRow[]>()
     ),
     // null until enough users are placed (see migration 004)
     supabase.rpc("readiness_average"),
@@ -110,7 +168,21 @@ export async function getAnalytics(): Promise<Analytics> {
     readinessAverage: typeof average === "number" ? average : null,
     blindSpots,
     blindSpotTotal: blindRows.length,
+    knowledgeMap: buildKnowledgeMap(bank, latestAttempt),
   };
+}
+
+/** Question text for the unit sheet's list, fetched only when it opens. */
+export async function getQuestionTexts(ids: number[]): Promise<Map<number, string>> {
+  const texts = new Map<number, string>();
+  if (!ids.length) return texts;
+  const { data } = await supabase
+    .from("questions")
+    .select("id, question_text")
+    .in("id", ids)
+    .returns<{ id: number; question_text: string }[]>();
+  for (const q of data ?? []) texts.set(q.id, q.question_text);
+  return texts;
 }
 
 export interface HistoryRow {

@@ -2,17 +2,19 @@ import { useCallback, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, RefreshControl, Pressable } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { KnowledgeMap } from "../../components/KnowledgeMap";
+import { UnitSheet } from "../../components/UnitSheet";
 import { getAnalytics } from "../../lib/analytics";
-import { attemptBadge } from "../../lib/labels";
+import { attemptBadge, subjectName } from "../../lib/labels";
 import { stripMarkup } from "../../lib/text";
 import { colors, radius, spacing, typography, masteryColor } from "../../lib/theme";
-import type { Analytics, BlindSpot } from "../../lib/types";
-
-const TOPIC_LABELS: Record<string, string> = { MIS: "管理資訊系統", DS: "資料結構", CS: "計算機概論" };
+import type { Analytics, BlindSpot, UnitStat } from "../../lib/types";
 
 export default function AnalyticsScreen() {
   const [stats, setStats] = useState<Analytics | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [openUnit, setOpenUnit] = useState<UnitStat | null>(null);
+  const openUnitIsFocus = !!openUnit && stats?.knowledgeMap.find((s) => s.topic === openUnit.topic)?.focus === openUnit;
 
   const load = useCallback(async () => setStats(await getAnalytics()), []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -30,6 +32,8 @@ export default function AnalyticsScreen() {
           <Summary label="AI 平均" value={stats?.avgAiScore != null ? stats.avgAiScore.toFixed(1) : "—"} accent />
         </View>
 
+        {stats && <KnowledgeMap subjects={stats.knowledgeMap} onOpenUnit={setOpenUnit} />}
+
         {stats && <BlindSpotCard items={stats.blindSpots} total={stats.blindSpotTotal} />}
 
         <View style={styles.card}>
@@ -45,7 +49,7 @@ export default function AnalyticsScreen() {
                 return (
                   <View key={t.topic} style={styles.barRow}>
                     <View style={styles.barHeader}>
-                      <Text style={styles.barLabel}>{TOPIC_LABELS[t.topic] ?? t.topic}</Text>
+                      <Text style={styles.barLabel}>{subjectName(t.topic)}</Text>
                       <Text style={styles.barCount}>{t.total} 次作答 · {pct}%</Text>
                     </View>
                     <View style={styles.barTrack}>
@@ -57,6 +61,7 @@ export default function AnalyticsScreen() {
           )}
         </View>
       </ScrollView>
+      <UnitSheet unit={openUnit} isFocus={openUnitIsFocus} onClose={() => setOpenUnit(null)} />
     </SafeAreaView>
   );
 }
@@ -84,7 +89,7 @@ function BlindSpotCard({ items, total }: { items: BlindSpot[]; total: number }) 
           {items.map((b) => {
             // self-assessment overrides the AI score (as in scoring.ts), so show that mark
             const badge = attemptBadge({ ...b, ai_score: b.self_assessment ? null : b.ai_score });
-            const where = [TOPIC_LABELS[b.topic ?? ""] ?? b.topic, b.subtopic].filter(Boolean).join(" · ");
+            const where = [b.topic && subjectName(b.topic), b.subtopic].filter(Boolean).join(" · ");
             return (
               <Pressable
                 key={b.questionId}

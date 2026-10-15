@@ -15,6 +15,30 @@ export function schoolName(code: string): string {
   return SCHOOL_NAMES[code] ?? code;
 }
 
+/** Subject (questions.topic) names. Statistics are computed per topic from
+ *  the data, so a new department's subjects only need an entry here. */
+const SUBJECTS: Record<string, { name: string; short: string }> = {
+  CS: { name: "計算機概論", short: "計概" },
+  DS: { name: "資料結構", short: "資結" },
+  MIS: { name: "管理資訊系統", short: "MIS" },
+  STAT: { name: "統計學", short: "統計" },
+};
+const SUBJECT_ORDER = Object.keys(SUBJECTS);
+
+export function subjectName(topic: string | null): string {
+  return topic ? SUBJECTS[topic]?.name ?? topic : "其他";
+}
+
+export function subjectShortName(topic: string): string {
+  return SUBJECTS[topic]?.short ?? topic;
+}
+
+/** Known subjects in their usual order, then any others alphabetically. */
+export function compareSubjects(a: string, b: string): number {
+  const rank = (t: string) => (SUBJECT_ORDER.includes(t) ? SUBJECT_ORDER.indexOf(t) : SUBJECT_ORDER.length);
+  return rank(a) - rank(b) || a.localeCompare(b);
+}
+
 /** "113 中央" for real exam questions, "範本題" for templates. */
 export function sourceLabel(q: { school: string | null; exam_year?: number | null }): string | null {
   if (!q.school) return null;
