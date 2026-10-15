@@ -60,6 +60,20 @@ def parse_mc_answer(out: dict, letters: list[str]) -> tuple[list[str], bool] | N
     return picked, multi
 
 
+# JSON's \b \f \n \r \t escapes silently swallow the first letter of LaTeX
+# commands a model writes with a single backslash (\frac -> form feed + "rac").
+# Doubling the backslash before a known command keeps the LaTeX intact.
+LATEX_AFTER_ESCAPE = re.compile(
+    r"(?<!\\)\\(?=(?:frac|forall|flat|floor|beta|begin|bar|binom|bigcup|bigcap|big|bmod|boldsymbol|bot|"
+    r"neq|nabla|not|nu|neg|newline|nsubseteq|nexists|ni|rho|rightarrow|right|rceil|rfloor|rangle|"
+    r"tau|theta|times|textbf|text|tilde|triangle|tfrac|tan|top|to)(?![a-zA-Z]))"
+)
+
+
+def protect_latex(text: str) -> str:
+    return LATEX_AFTER_ESCAPE.sub(r"\\\\", text)
+
+
 def repair_json(text: str) -> dict:
     """Gemini's JSON mode isn't always strict — despite responseMimeType
     being set to application/json, it sometimes still wraps the object in a
@@ -73,6 +87,7 @@ def repair_json(text: str) -> dict:
     characters and stray backslashes *inside* a string value are illegal and
     need escaping. An earlier version escaped newlines everywhere, which
     broke the separator between fields."""
+    text = protect_latex(text)
     try:
         return json.loads(text)
     except json.JSONDecodeError:
