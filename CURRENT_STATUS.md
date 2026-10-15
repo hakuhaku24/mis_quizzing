@@ -144,7 +144,7 @@ mis-grad-exam-coach/
 | C3 | Play Console 應用程式內容：資料安全性、內容分級問卷、目標對象（非兒童）、廣告（無）、**應用程式存取權**（需登入 → 提供一組審查用測試帳號） | 開發者（Claude 可提供填寫內容） | 進行中：應用程式存取權 ✅（審查帳號在 `.env` 的 `PLAY_REVIEW_EMAIL`／`PLAY_REVIEW_PASSWORD`，已實測可登入）；資料安全性已依下方答案填寫；剩內容分級、目標對象、廣告 |
 | C4 | 商店資訊：名稱、簡短／完整說明、512×512 圖示、1024×500 主題圖片、至少 2 張手機截圖。標題建議「考研教練－資管所題庫・AI 批改申論題」（見 6.2.8） | 開發者（Claude 可擬文案） | 未開始 |
 | C5 | 正式版打包：Play 需要 AAB（`eas build --profile production`），不是 APK；production 環境的 Supabase 設定已確認存在 | Claude | 未開始 |
-| C6 | OTA 頻道：Play 版本收 `production` 頻道，現在的 APK 收 `preview`；之後兩個頻道都要推 | Claude | 記住 |
+| C6 | OTA 頻道：Play 版本收 `production` 頻道，現在的 APK 收 `preview`；之後兩個頻道都要推。**加任何原生套件（例如 `react-native-svg`、RevenueCat）時，一定要把 `app.json` 的 `version` 升一號**（runtimeVersion 跟著 version 走），否則 OTA 會推到沒有該套件的舊安裝檔而閃退。2026-10-15 加 `react-native-svg` → 1.0.1，舊的 1.0.0 APK 從此收不到更新，開發者改從 Play 內部測試軌道安裝 | Claude | 記住 |
 | C7 | 開發者自己的手機要先**解除安裝現在的 APK**，再從 Play 測試連結安裝（簽章不同，不能直接覆蓋；伺服器上的作答資料不受影響） | 開發者 | 封測開始時 |
 | C8 | 測試者：用 Google 帳號 email 加入，至少 12 人連續 14 天（新的個人開發者帳號才需要，見 T6），招 15～20 人當緩衝；第一次送審可能要等幾天，14 天從測試者加入已上架的版本才開始算。測試者不必是資管考生（開發者身邊的企管所、物理治療所、機械所考生也可以，順便問 6.2.8 的問題） | 開發者 | 招募中 |
 
