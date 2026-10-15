@@ -191,7 +191,7 @@ mis-grad-exam-coach/
 | 處理題目的腳本（OCR、切題、詳解、產題，在開發者電腦上跑） | Gemini 免費金鑰 → OpenRouter 免費模型 → **停下來**，印出估計費用；要用 Gemini 付費必須加 `--allow-paid`，且 Claude 每次加之前都要先問開發者 | 資料只有考題，可以用免費服務 |
 | AI 批改（線上 Edge Function） | Groq 免費 → Gemini **付費**（`gemini-2.5-flash-lite`，最便宜） | **學生作答不可送 Gemini 免費版**：Google 條款明寫免費服務會用來改進產品、可能有人工審查，且要求不要送個人資訊 |
 
-- 用到付費就記錄，並透過 Google 預算提醒（50%／90%）和即時通知（待選 Discord 或 Telegram）告知開發者。
+- 用到付費就記錄，並透過 Google 預算提醒（50%／90%，email）告知開發者；即時通知（Discord）開發者決定先不做。
 - 金鑰：舊的 Gemini 免費金鑰（專案 494657705930，未綁帳單，所以不會被扣款）保留；新的付費金鑰放在 `.env` 的 `GEMINI_PAID_API_KEY`；OpenRouter 在 `.env` 的 `OPENROUTER_API_KEY`（免費模式，每天 50 次免費模型）。
 - 不用多個 Google 帳號輪流使用免費額度（Google APIs 條款 2(d) 禁止規避用量限制，有停權風險）。
 - 開發者預算：Gemini 每月 NT$600，餘額低於 NT$150 自動儲值；新增一個科目以 US$20 為上限。
@@ -201,8 +201,8 @@ mis-grad-exam-coach/
 | # | 待辦（需要開發者本人操作或決定） | 何時要完成 | 狀態 |
 |---|---|---|---|
 | T1 | 決定第 389 題（內部碎片）的正確答案 | 寫入複選題修正前 | ✅ C、D |
-| T2 | 照 6.2.6 建立「考研教練」專用專案、開付費、設上限，付費金鑰自己貼進 `.env`（`GEMINI_PAID_API_KEY`）。（2026-10-15 開發者確認：舊免費金鑰的專案 494657705930 未開付費＝Free tier；新專案尚未建立）。注意：`gemini-2.5-flash-lite` 對此帳號回 404，付費後援改用 `gemini-3.1-flash-lite` | 批改改用付費後援之前 | 等待中 |
-| T3 | 即時通知選 **Discord**：建立伺服器與頻道 webhook，網址自己貼進 `.env`（`DISCORD_WEBHOOK_URL`） | 做付費提醒功能時 | 已選 Discord，待建立 webhook |
+| T2 | 照 6.2.6 建立「考研教練」專用專案、開付費、設上限，付費金鑰自己貼進 `.env`（`GEMINI_PAID_API_KEY`）。（2026-10-15 開發者確認：舊免費金鑰的專案 494657705930 未開付費＝Free tier；新專案尚未建立）。注意：`gemini-2.5-flash-lite` 已不開放給新使用者（Google 404 訊息原文：no longer available to new users），付費後援改用 `gemini-3.1-flash-lite` | 批改改用付費後援之前 | 等待中 |
+| T3 | 即時通知 | — | ❌ 2026-10-15 開發者決定先不做 Discord，只靠 Google 帳單預算提醒（email） |
 | T4 | Groq Developer 方案恢復開放時可再考慮升級（非必要） | 隨時 | 選擇性 |
 | T5 | OpenRouter 金鑰曾貼在對話中，有空重新產生一把再更新 `.env` | 有空時 | 選擇性 |
 | T6 | 待釐清 #1：Google Play 開發者帳號是否沿用補品日記那個、是否為 2023/11/13 後開的個人帳號 | 封測前 | 未回答 |
