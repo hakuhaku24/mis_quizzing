@@ -1,18 +1,16 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
-import { GRADUATE_AT, PLACEMENT_QUESTIONS, latestScores, taiwanDate, type ScorableAttempt } from "./scoring";
+import { GRADUATE_AT, latestScores, taiwanDate, type ScorableAttempt } from "./scoring";
 import type { DailyItem, Question, Slot } from "./types";
 
 /**
- * Daily task selection, done client-side. Two phases:
- *  - placement: fewer than PLACEMENT_QUESTIONS scored questions → serve
- *    multiple-choice questions round-robin across subjects, stable per user;
- *  - normal: review (due, not yet answered right) → weak concepts → unseen.
- *    Computed once per Taiwan day and cached, so finishing a question marks
- *    it done instead of swapping a new one in.
+ * Daily task selection, done client-side: review (due, not yet answered
+ * right) → weak concepts → unseen. Computed once per Taiwan day and cached,
+ * so finishing a question marks it done instead of swapping a new one in.
+ * New users are not pushed into a placement set; readiness appears once any
+ * 5 questions are scored (see scoring.ts).
  */
 const DAILY_TOPICS = ["CS", "DS"];
-const PLACEMENT_TOPICS = ["CS", "DS", "MIS"];
 const SLOTS = { review: 2, weak: 6, unseen: 2 };
 const TOTAL = SLOTS.review + SLOTS.weak + SLOTS.unseen;
 const DAY_MS = 86_400_000;
@@ -24,12 +22,6 @@ interface CachedDaily {
 }
 
 const cacheKey = (userId: string) => `daily:${userId}`;
-
-function hashSeed(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 9973;
-  return h;
-}
 
 export async function getDailyTasks(): Promise<DailyItem[]> {
   const { data: userData } = await supabase.auth.getUser();
@@ -57,10 +49,6 @@ export async function getDailyTasks(): Promise<DailyItem[]> {
     done_today: attemptedToday.has(q.id),
     today_attempt_id: attemptedToday.get(q.id) ?? null,
   });
-
-  if (latest.size < PLACEMENT_QUESTIONS) {
-    return placementTasks(userId, latest, PLACEMENT_QUESTIONS - latest.size).then((qs) => qs.map((q) => toItem(q, "placement")));
-  }
 
   const { data: questionRows } = await supabase.from("questions").select(QUESTION_COLUMNS).in("topic", DAILY_TOPICS);
   const questions = (questionRows ?? []) as Question[];
@@ -92,27 +80,6 @@ export async function getDailyTasks(): Promise<DailyItem[]> {
     const q = byId.get(id);
     return q ? [toItem(q, slot)] : [];
   });
-}
-
-async function placementTasks(userId: string, latest: Map<number, number>, needed: number): Promise<Question[]> {
-  const { data } = await supabase
-    .from("questions")
-    .select(QUESTION_COLUMNS)
-    .eq("question_type", "multiple_choice")
-    .not("correct_option", "is", null)
-    .in("topic", PLACEMENT_TOPICS);
-  const seed = hashSeed(userId);
-  const key = (id: number) => (id * 48271 + seed * 1009) % 9973;
-  const pools = PLACEMENT_TOPICS.map((t) =>
-    ((data ?? []) as Question[]).filter((q) => q.topic === t && !latest.has(q.id)).sort((a, b) => key(a.id) - key(b.id))
-  );
-  // round-robin across subjects so the 5 placement questions cover all three
-  const out: Question[] = [];
-  for (let i = 0; out.length < needed && pools.some((p) => p.length); i++) {
-    const q = pools[i % pools.length].shift();
-    if (q) out.push(q);
-  }
-  return out;
 }
 
 function planDay(

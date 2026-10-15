@@ -10,6 +10,7 @@ import RichText from "../../components/RichText";
 import { loadDraft, saveDraft, clearDraft } from "../../lib/drafts";
 import { choiceLabel, isMultiSelect, parseChoice, sameChoice, toggleChoice } from "../../lib/choices";
 import { sourceLabel } from "../../lib/labels";
+import { randomQuestionId } from "../../lib/random";
 import { getQuestion, getAttempt, submitAttempt, setSelfAssessment, setErrorType, gradeAttempt } from "../../lib/attempts";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { AiGrade, Confidence, ErrorType, Question, SelfAssessment, Solution } from "../../lib/types";
@@ -25,13 +26,21 @@ function parseOptions(q: Question): string[] {
 }
 
 export default function QuestionScreen() {
-  const { id, attempt } = useLocalSearchParams<{ id: string; attempt?: string }>();
+  const { id, attempt, from } = useLocalSearchParams<{ id: string; attempt?: string; from?: string }>();
   // key forces a fresh screen state when switching from a saved attempt to "practice again"
-  return <QuestionView key={`${id}-${attempt ?? "new"}`} id={Number(id)} savedAttemptId={attempt ? Number(attempt) : null} />;
+  return (
+    <QuestionView
+      key={`${id}-${attempt ?? "new"}`}
+      id={Number(id)}
+      savedAttemptId={attempt ? Number(attempt) : null}
+      randomMode={from === "random"}
+    />
+  );
 }
 
-function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: number | null }) {
+function QuestionView({ id, savedAttemptId, randomMode }: { id: number; savedAttemptId: number | null; randomMode: boolean }) {
   const router = useRouter();
+  const [drawingNext, setDrawingNext] = useState(false);
   const [loading, setLoading] = useState(true);
   const [question, setQuestion] = useState<Question | null>(null);
   const [solution, setSolution] = useState<Solution | null>(null);
@@ -141,6 +150,14 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
     setSubmitting(false);
   };
 
+  const drawAnother = async () => {
+    if (drawingNext) return;
+    setDrawingNext(true);
+    const next = await randomQuestionId(id);
+    setDrawingNext(false);
+    if (next) router.replace(`/question/${next}?from=random`);
+  };
+
   const handleSelfAssess = async (v: SelfAssessment) => {
     setSelfAssessmentState(v);
     if (attemptId) await setSelfAssessment(attemptId, v);
@@ -241,6 +258,12 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
                 })}
               </View>
             ) : (
+              <>
+              {question.needs_drawing && !submitted && (
+                <Text style={styles.drawHint}>
+                  這題需要畫圖：可以用文字表示，例如樹寫成「15(11(9, 14), 23)」、圖寫成邊的列表「a-b:3, b-c:5」、類別圖列出類別與屬性方法；也可以畫在紙上，再對照詳解自評。
+                </Text>
+              )}
               <TextInput
                 style={styles.textArea}
                 placeholder="在此輸入你的答案…"
@@ -250,6 +273,7 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
                 value={answer}
                 onChangeText={setAnswer}
               />
+              </>
             )}
 
             {!submitted ? (
@@ -352,6 +376,13 @@ function QuestionView({ id, savedAttemptId }: { id: number; savedAttemptId: numb
             </View>
           )}
 
+          {randomMode && submitted && !savedAt && (
+            <Pressable style={styles.retryButton} onPress={drawAnother} disabled={drawingNext}>
+              <Ionicons name="shuffle" size={16} color={colors.accent} />
+              <Text style={styles.retryButtonText}>{drawingNext ? "抽題中…" : "再抽一題"}</Text>
+            </Pressable>
+          )}
+
           {savedAt && (
             <Pressable style={styles.retryButton} onPress={() => router.replace(`/question/${id}`)}>
               <Ionicons name="refresh" size={16} color={colors.accent} />
@@ -432,6 +463,7 @@ const styles = StyleSheet.create({
   errorText: { color: colors.danger, fontSize: 12, marginTop: 4 },
   savedAt: { fontSize: 11.5, color: colors.ink3, paddingHorizontal: 2 },
   draftHint: { fontSize: 11.5, color: colors.info, fontWeight: "600" },
+  drawHint: { fontSize: 12, lineHeight: 18, color: colors.ink2, backgroundColor: colors.accentSoft, borderRadius: radius.sm, padding: spacing.sm, marginBottom: spacing.sm },
   retryButton: { flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.accent, borderRadius: radius.md, paddingVertical: 12, backgroundColor: colors.surface },
   retryButtonText: { color: colors.accent, fontWeight: "700", fontSize: 14 },
   aiCard: { backgroundColor: colors.aiSoft, borderWidth: 1, borderColor: colors.aiLine, borderRadius: radius.md, padding: spacing.md, gap: spacing.md },

@@ -4,7 +4,7 @@ export type QuestionType = "essay" | "short_answer" | "multiple_choice" | "calcu
 export type Confidence = "low" | "medium" | "high";
 export type SelfAssessment = "correct" | "partial" | "wrong";
 export type ErrorType = "concept" | "memory" | "careless" | "unseen";
-export type Slot = "placement" | "weak" | "review" | "unseen" | "extra";
+export type Slot = "weak" | "review" | "unseen" | "extra";
 
 export interface Question {
   id: number;

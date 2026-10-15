@@ -1,6 +1,7 @@
 import { colors } from "./theme";
 
 const SCHOOL_NAMES: Record<string, string> = {
+  NTU: "臺大",
   NCU: "中央",
   NCCU: "政大",
   NCKU: "成大",

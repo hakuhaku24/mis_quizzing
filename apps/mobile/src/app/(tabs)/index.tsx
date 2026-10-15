@@ -9,6 +9,7 @@ import { getAnalytics } from "../../lib/analytics";
 import { deleteAccount, logout } from "../../lib/account";
 import { PLACEMENT_QUESTIONS } from "../../lib/scoring";
 import { supabase } from "../../lib/supabase";
+import { randomQuestionId } from "../../lib/random";
 import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { Analytics, DailyItem } from "../../lib/types";
 
@@ -16,14 +17,13 @@ const EXAM_DATE = new Date("2027-02-01T00:00:00+08:00");
 const TOPIC_LABELS: Record<string, string> = { MIS: "管理資訊系統", DS: "資料結構", CS: "計算機概論" };
 
 const SLOT_META: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string; bg: string; line: string }> = {
-  placement: { label: "程度定位", icon: "compass-outline", color: colors.accent, bg: colors.accentSoft, line: "#C7D2FE" },
   review: { label: "到期複習", icon: "refresh-outline", color: "#92400E", bg: colors.warningSoft, line: colors.warningLine },
   weak: { label: "弱點加強", icon: "locate-outline", color: "#991B1B", bg: colors.dangerSoft, line: colors.dangerLine },
   unseen: { label: "新題", icon: "add-circle-outline", color: "#1E40AF", bg: colors.infoSoft, line: colors.infoLine },
   extra: { label: "加練", icon: "ellipsis-horizontal-circle-outline", color: colors.ink2, bg: "#F4F4F5", line: colors.line },
 };
 
-/** One-time reveal right after the 5th placement answer is scored. */
+/** One-time reveal once any 5 answers have been scored. */
 async function announcePlacementOnce(percent: number, average: number | null) {
   try {
     const { data } = await supabase.auth.getSession();
@@ -91,7 +91,7 @@ export default function HomeScreen() {
   const doneCount = daily?.filter((d) => d.done_today).length ?? 0;
   const firstUndone = daily?.find((d) => !d.done_today);
 
-  const bySlot = { placement: 0, review: 0, weak: 0, unseen: 0 };
+  const bySlot = { review: 0, weak: 0, unseen: 0 };
   for (const d of daily ?? []) if (d.slot in bySlot) bySlot[d.slot as keyof typeof bySlot]++;
 
   const examTopics = (stats?.topicStats ?? []).filter((t) => t.topic === "CS" || t.topic === "DS");
@@ -99,9 +99,16 @@ export default function HomeScreen() {
   const placing = readiness ? readiness.percent === null : false;
   const placedCount = Math.min(readiness?.scoredQuestions ?? 0, PLACEMENT_QUESTIONS);
 
-  const ctaText = placing
-    ? placedCount === 0 ? "開始定位 →" : `繼續定位（還差 ${PLACEMENT_QUESTIONS - placedCount} 題）→`
-    : doneCount === 0 ? "開始今天的練習 →" : `繼續練習（剩 ${(daily?.length ?? 0) - doneCount} 題）→`;
+  const ctaText = doneCount === 0 ? "開始今天的練習 →" : `繼續練習（剩 ${(daily?.length ?? 0) - doneCount} 題）→`;
+
+  const [drawing, setDrawing] = useState(false);
+  const openRandom = async () => {
+    if (drawing) return;
+    setDrawing(true);
+    const id = await randomQuestionId();
+    setDrawing(false);
+    if (id) router.push(`/question/${id}?from=random`);
+  };
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -135,7 +142,7 @@ export default function HomeScreen() {
                 {!stats
                   ? " "
                   : placing
-                    ? `先作答 ${PLACEMENT_QUESTIONS} 題，我們會定位你的程度（已完成 ${placedCount}/${PLACEMENT_QUESTIONS}）。`
+                    ? `寫任意 ${PLACEMENT_QUESTIONS} 題就會出現你的考前準備度（還差 ${PLACEMENT_QUESTIONS - placedCount} 題）。`
                     : `累積作答 ${stats.totalAttempts} 題，AI 批改 ${stats.aiGraded} 題。`}
               </Text>
               {!placing && stats?.readinessAverage != null && (
@@ -148,12 +155,10 @@ export default function HomeScreen() {
         <View style={styles.card}>
           <View>
             <Text style={styles.cardTitle}>今天練什麼</Text>
-            <Text style={styles.cardSub}>
-              {placing ? "先用幾題選擇題定位你的程度" : "依到期複習 → 弱點 → 新題排序，不是隨機出題"}
-            </Text>
+            <Text style={styles.cardSub}>依到期複習 → 弱點 → 新題排序，不是隨機出題</Text>
           </View>
 
-          {(["placement", "review", "weak", "unseen"] as const).map((slot) => {
+          {(["review", "weak", "unseen"] as const).map((slot) => {
             const meta = SLOT_META[slot];
             const count = bySlot[slot];
             if (!count) return null;
@@ -186,6 +191,17 @@ export default function HomeScreen() {
             <View style={styles.doneBanner}><Text style={styles.doneText}>今日任務完成！</Text></View>
           )}
         </View>
+
+        <Pressable style={styles.randomRow} onPress={openRandom} disabled={drawing}>
+          <View style={styles.randomIcon}>
+            <Ionicons name="shuffle" size={16} color={colors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.randomTitle}>{drawing ? "抽題中…" : "隨機一題"}</Text>
+            <Text style={styles.randomSub}>從整個題庫隨機抽，跟每日練習分開</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.ink3} />
+        </Pressable>
 
         {examTopics.length > 0 && (
           <Pressable style={styles.masteryRow} onPress={() => router.push("/(tabs)/analytics")}>
@@ -222,6 +238,10 @@ const styles = StyleSheet.create({
   heroRow: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
   ring: { width: 64, height: 64, borderRadius: radius.full, borderWidth: 4, borderColor: "rgba(255,255,255,0.3)", alignItems: "center", justifyContent: "center" },
   ringText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  randomRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: spacing.lg },
+  randomIcon: { width: 32, height: 32, borderRadius: radius.full, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
+  randomTitle: { fontSize: 14, fontWeight: "800", color: colors.ink },
+  randomSub: { fontSize: 11, color: colors.ink3, marginTop: 2 },
   ringTextSmall: { color: "#fff", fontSize: 13, fontWeight: "800" },
   heroSub: { color: "rgba(255,255,255,0.75)", fontSize: 12, marginBottom: 3 },
   heroDesc: { color: "#fff", fontSize: 13, lineHeight: 19 },
