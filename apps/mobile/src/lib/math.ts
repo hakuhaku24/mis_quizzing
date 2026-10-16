@@ -171,10 +171,14 @@ export function latexToText(expr: string): string {
     .trim();
 }
 
-/** Replace every $$...$$ and $...$ in a string with readable text. */
+/** Replace every $$...$$ and $...$ in a string with readable text. An inline
+ *  $...$ may span lines only when it really is LaTeX (has a \command), so two
+ *  unrelated dollar signs on different lines are never paired up. */
 export function formatMath(text: string): string {
   if (!text.includes("$")) return text;
   return text
     .replace(/\$\$([\s\S]+?)\$\$/g, (_, m: string) => `\n${latexToText(m)}\n`)
-    .replace(/\$([^$\n]+?)\$/g, (_, m: string) => latexToText(m));
+    .replace(/\$([^$]+?)\$/g, (whole: string, m: string) =>
+      m.includes("\n") && !/\\[A-Za-z]/.test(m) ? whole : latexToText(m)
+    );
 }

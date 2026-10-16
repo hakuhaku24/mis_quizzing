@@ -37,9 +37,28 @@ function splitCodeBlocks(text: string): { type: "text" | "code"; text: string }[
     .filter((p) => p.text.trim().length > 0);
 }
 
+/** Markdown the renderer doesn't lay out: "## heading" becomes a bold line and
+ *  a | table | becomes one line per row (cells separated by ｜, header bold). */
+function flattenMarkdown(text: string): string {
+  return text
+    .split("\n")
+    .flatMap((line, i, lines) => {
+      const heading = /^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
+      if (heading) return [`**${heading[1]}**`];
+      // a table row has at least two cells (3+ pipes), so |x| on its own line stays math
+      if (!/^\s*\|.*\|.*\|\s*$/.test(line)) return [line];
+      if (/^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes("-")) return []; // |---|---| separator
+      const cells = line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const isHeader = /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1] ?? "") && (lines[i + 1] ?? "").includes("-");
+      const row = cells.join(" ｜ ");
+      return [isHeader ? `**${row}**` : row];
+    })
+    .join("\n");
+}
+
 function renderInline(text: string) {
   // math becomes plain text first, then **bold** spans are split out
-  const tokens = formatMath(text).split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+  const tokens = formatMath(flattenMarkdown(text)).split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
   return tokens.map((t, i) => {
     if (t.startsWith("**") && t.endsWith("**")) {
       return <Text key={i} style={styles.bold}>{t.slice(2, -2)}</Text>;
