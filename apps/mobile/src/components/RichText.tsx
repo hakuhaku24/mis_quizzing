@@ -1,17 +1,15 @@
 import { View, Text, StyleSheet } from "react-native";
+import { formatMath } from "../lib/math";
 import { colors } from "../lib/theme";
 
 /**
  * Simplified markdown/LaTeX renderer for React Native.
  *
- * KNOWN LIMITATION (flagged, not hidden): the web app renders this text with
- * react-markdown + KaTeX (apps/web/src/components/RichText.tsx), which needs
- * a DOM and can't run in React Native. This version only strips $...$
- * delimiters and italicizes the math instead of real-rendering it, and
- * handles **bold**, ・ bullets, and ``` code blocks with plain RN styling.
- * Good enough to read; not a real KaTeX replacement. Follow-up: a
- * react-native-webview-based KaTeX component for faithful rendering —
- * not attempted tonight since there's no emulator/device here to test it on.
+ * The web app renders this text with react-markdown + KaTeX, which needs a
+ * DOM. Here math ($...$, $$...$$) is converted to readable Unicode text by
+ * lib/math.ts (O(n log n), 2¹³, ≤, →), and **bold**, ・ bullets and ```
+ * code blocks get plain RN styling. Not a typesetter, but no raw LaTeX
+ * reaches the screen.
  */
 export default function RichText({ children, style }: { children: string; style?: object }) {
   const blocks = splitCodeBlocks(children);
@@ -40,14 +38,11 @@ function splitCodeBlocks(text: string): { type: "text" | "code"; text: string }[
 }
 
 function renderInline(text: string) {
-  // split on **bold** and $math$, keep both as separate styled spans
-  const tokens = text.split(/(\*\*[^*]+\*\*|\$[^$]+\$)/g).filter(Boolean);
+  // math becomes plain text first, then **bold** spans are split out
+  const tokens = formatMath(text).split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
   return tokens.map((t, i) => {
     if (t.startsWith("**") && t.endsWith("**")) {
       return <Text key={i} style={styles.bold}>{t.slice(2, -2)}</Text>;
-    }
-    if (t.startsWith("$") && t.endsWith("$")) {
-      return <Text key={i} style={styles.math}>{t.slice(1, -1)}</Text>;
     }
     return <Text key={i}>{t}</Text>;
   });
@@ -56,7 +51,6 @@ function renderInline(text: string) {
 const styles = StyleSheet.create({
   paragraph: { fontSize: 13.5, lineHeight: 22, color: colors.ink, marginBottom: 8 },
   bold: { fontWeight: "700" },
-  math: { fontStyle: "italic", fontFamily: "monospace" },
   codeBlock: { backgroundColor: "#18181B", borderRadius: 10, padding: 12, marginVertical: 6 },
   codeText: { color: "#E4E4E7", fontFamily: "monospace", fontSize: 12.5, lineHeight: 18 },
 });

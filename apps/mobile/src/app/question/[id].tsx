@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import RichText from "../../components/RichText";
+import { formatMath } from "../../lib/math";
 import { loadDraft, saveDraft, clearDraft } from "../../lib/drafts";
 import { choiceLabel, isMultiSelect, parseChoice, sameChoice, toggleChoice } from "../../lib/choices";
 import { sourceLabel } from "../../lib/labels";
@@ -269,7 +270,7 @@ function QuestionView({ id, savedAttemptId, randomMode }: { id: number; savedAtt
                       >
                         <Text style={[styles.optionBadgeText, (tone === "selected" || tone === "right") && { color: "#fff" }]}>{letter}</Text>
                       </View>
-                      <Text style={styles.optionText}>{opt}</Text>
+                      <Text style={styles.optionText}>{formatMath(opt)}</Text>
                       {submitted && isRight && (
                         <Text style={styles.rightMark}>{multi && !isSelected ? "✓ 正解（漏選）" : "✓ 正解"}</Text>
                       )}
@@ -352,7 +353,7 @@ function QuestionView({ id, savedAttemptId, randomMode }: { id: number; savedAtt
                     {aiGrade.wrong_points.length > 0 && (
                       <PointList title="✗ 寫錯的地方" color={colors.danger} items={aiGrade.wrong_points} />
                     )}
-                    <Text style={styles.feedback}>{aiGrade.feedback}</Text>
+                    <Text style={styles.feedback}>{formatMath(aiGrade.feedback)}</Text>
                   </View>
                 )}
 
@@ -500,7 +501,7 @@ function PointList({ title, color, items }: { title: string; color: string; item
     <View style={{ gap: 4 }}>
       <Text style={{ color, fontWeight: "700", fontSize: 12.5 }}>{title}</Text>
       {items.map((p, i) => (
-        <Text key={i} style={{ fontSize: 13, color: colors.ink2, paddingLeft: 10 }}>・{p}</Text>
+        <Text key={i} style={{ fontSize: 13, color: colors.ink2, paddingLeft: 10 }}>・{formatMath(p)}</Text>
       ))}
     </View>
   );
