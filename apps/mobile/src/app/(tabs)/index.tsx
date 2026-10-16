@@ -15,7 +15,6 @@ import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { Analytics, DailyItem } from "../../lib/types";
 
 const EXAM_DATE = new Date("2027-02-01T00:00:00+08:00");
-const TOPIC_LABELS: Record<string, string> = { MIS: "管理資訊系統", DS: "資料結構", CS: "計算機概論" };
 
 const SLOT_META: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string; bg: string; line: string }> = {
   review: { label: "到期複習", icon: "refresh-outline", color: "#92400E", bg: colors.warningSoft, line: colors.warningLine },
@@ -95,7 +94,6 @@ export default function HomeScreen() {
   const bySlot = { review: 0, weak: 0, unseen: 0 };
   for (const d of daily ?? []) if (d.slot in bySlot) bySlot[d.slot as keyof typeof bySlot]++;
 
-  const examTopics = (stats?.topicStats ?? []).filter((t) => t.topic === "CS" || t.topic === "DS");
   const readiness = stats?.readiness;
   const placing = readiness ? readiness.percent === null : false;
   const placedCount = Math.min(readiness?.scoredQuestions ?? 0, PLACEMENT_QUESTIONS);
@@ -204,23 +202,6 @@ export default function HomeScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.ink3} />
         </Pressable>
 
-        {examTopics.length > 0 && (
-          <Pressable style={styles.masteryRow} onPress={() => router.push("/(tabs)/analytics")}>
-            <View>
-              <Text style={styles.masteryText}>
-                {examTopics
-                  .slice()
-                  .sort((a, b) => (a.mastery ?? 0) - (b.mastery ?? 0))
-                  .slice(0, 2)
-                  .map((t) => `${TOPIC_LABELS[t.topic] ?? t.topic} ${Math.round((t.mastery ?? 0) * 100)}%`)
-                  .join(" · ")}
-              </Text>
-              <Text style={styles.masterySub}>看完整弱點分析</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.ink3} />
-          </Pressable>
-        )}
-
         <LegalLinks />
       </ScrollView>
     </SafeAreaView>
@@ -260,7 +241,4 @@ const styles = StyleSheet.create({
   ctaText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   doneBanner: { backgroundColor: colors.successSoft, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center" },
   doneText: { color: colors.success, fontWeight: "700", fontSize: 14 },
-  masteryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: spacing.lg },
-  masteryText: { fontSize: 12.5, fontWeight: "700", color: colors.ink },
-  masterySub: { fontSize: 11, color: colors.ink3, marginTop: 2 },
 });
