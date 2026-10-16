@@ -93,6 +93,8 @@ SPLIT_SYSTEM = """你會拿到一份台灣資管所研究所考卷的逐字轉�
 - text 必須逐字照抄轉錄文（數學式、程式碼也照抄），不可改寫、摘要或翻譯；我會檢查它是否出現在原文中。
 - 一道題含其所有子題 (a)(b)(c) 或 (1)(2) 算一題，子題留在 text 裡。
 - 只有真正的選擇題（有 (A)(B)(C)(D) 等選項讓考生選）才是 multiple_choice，options 依序放選項內容（不含 (A) 等標號）；申論題的 (a)(b) 子題不是選項。
+- 注意大寫標號 (A)(B) 也常是子題：後面帶配分（例如「(A) (5%)」「(B) 10 分」），或內容是要考生作答的要求（說明、解釋、計算、寫出、畫出、比較、Explain、Compute、Write…），就是申論題的子題，整段留在 text，type 不是 multiple_choice。
+- 考卷頁首頁尾的固定文字（例如「※本考試禁止使用計算器」「第 1 頁，共 3 頁」「背面尚有試題」）不要放進 text 或 options。
 - multi_select：大題說明或題目寫明複選、「全對才給分」或 select all that apply 時為 true。
 - 題組（多題共用一段情境）時，把情境原文放在每一題 text 的開頭，前面加「【題組情境】」。
 - needs_drawing：考生必須畫圖才能作答（畫樹、畫圖、畫 UML／流程圖等）時為 true。
@@ -270,6 +272,20 @@ def vocabulary() -> dict[str, list[str]]:
     return vocab
 
 
+SUBPART_DEMAND = re.compile(
+    r"^\s*([（(]?\s*\d+\s*(%|分|points?)\s*[)）]?|說明|解釋|試述|試|請|計算|寫出|畫出|列出|比較|為何|何謂|"
+    r"explain|describe|write|draw|compute|calculate|find|show|give|list|discuss|define|what|why|how)", re.I)
+SUBPART_POINTS = re.compile(r"[（(]\s*\d+\s*(%|分|points?)\s*[)）]", re.I)
+
+
+def looks_like_subparts(options: list) -> bool:
+    """MC 'options' that are really the (A)(B) sub-questions of an essay
+    question: they carry points or ask the student to do something."""
+    opts = [str(o or "") for o in options or []]
+    hits = sum(1 for o in opts if SUBPART_DEMAND.search(o) or SUBPART_POINTS.search(o))
+    return bool(opts) and hits * 2 >= len(opts)
+
+
 def stage_split(key: str, paper: tuple, vocab: dict) -> None:
     pid, _rel, _code, school_name, _dept, year, subject, default_topic = paper
     out = WORK / pid / "split.json"
@@ -303,6 +319,10 @@ def stage_split(key: str, paper: tuple, vocab: dict) -> None:
         q["concepts"] = [c for c in (q.get("concepts") or []) if c in vocab.get(q["topic"], [])][:3]
         if q.get("type") == "multiple_choice" and not q.get("options"):
             q["type"] = "short_answer"  # no parsable options: don't pretend it's MC
+        if q.get("type") == "multiple_choice" and looks_like_subparts(q["options"]):
+            # a (A)(B) sub-question set read as options: put the parts back into the text
+            q["text"] = q.get("text", "") + "\n" + "\n".join(f"({chr(65 + i)}) {o}" for i, o in enumerate(q["options"]))
+            q["type"] = "essay"
         if q.get("type") != "multiple_choice":
             q["options"] = None
             q["multi_select"] = False
@@ -470,15 +490,38 @@ SECTION_HEADER = re.compile(r"^\s*([一二三四五六七八九十]+、[^\n]*(�
 LEADING_NUMBER = re.compile(r"^\s*\d+\s*[.、]\s*(\[\s*\]\s*)?")
 
 
+# Page header/footer lines that OCR glues onto a question or option. Lines
+# that are never exam content go wherever they appear; looser ones (科目：…,
+# the 碩士班 組別 line) only as part of a trailing header block.
+FURNITURE_LINE = re.compile(
+    r"^\s*[※*]?\s*(?:"
+    r"本(?:科)?考?考試(?:禁止|禁|不可|不得)(?:使)?用計算[器機].*"
+    r"|請在答案卷.*作答.*"
+    r"|(?:(?:註|注意)\s*[:：]?\s*)?[（(]?背面(?:尚|仍|還)?有試題.*"
+    r"|第\s*\d+\s*頁\s*[，,]?\s*共\s*\d+\s*頁.*"
+    r"|【\s*不可使用計算機\s*】.*"
+    r"|[（(]?請翻(?:頁|面).*"
+    r")\s*$")
+HEADER_LINE = re.compile(r"^\s*(?:科目\s*[:：].*|.*碩士班.*(?:組|生).*)\s*$")
+
+
+def strip_page_furniture(text: str) -> str:
+    lines = [ln for ln in text.split("\n") if not FURNITURE_LINE.match(ln)]
+    while lines and (not lines[-1].strip() or HEADER_LINE.match(lines[-1])):
+        lines.pop()
+    return "\n".join(lines).strip()
+
+
 def clean_text(text: str) -> str:
     """Drop exam-paper furniture the student doesn't need: leading section
-    headers ("二、問答題，共 40 分。", "※ 本大題請於…") and the printed number /
-    answer box ("8. [    ]") — the number is stored in question_number."""
+    headers ("二、問答題，共 40 分。", "※ 本大題請於…"), page header/footer
+    lines ("※本考試禁止使用計算器") and the printed number / answer box
+    ("8. [    ]") — the number is stored in question_number."""
     prev = None
     while prev != text:
         prev = text
         text = SECTION_HEADER.sub("", text, count=1)
-    return LEADING_NUMBER.sub("", text, count=1).strip()
+    return strip_page_furniture(LEADING_NUMBER.sub("", text, count=1))
 
 
 def stage_publish(env_root: dict, papers: list) -> None:
@@ -508,7 +551,7 @@ def stage_publish(env_root: dict, papers: list) -> None:
                 "topic": q["topic"], "subtopic": (q.get("concepts") or [None])[0], "concepts": q.get("concepts") or None,
                 "value_score": 0.9, "source_type": "pdf_extracted", "verified_status": "unverified",
                 "extraction_confidence": q.get("fidelity"),
-                "options": q.get("options") if mc else None,
+                "options": [strip_page_furniture(str(o)) for o in q["options"]] if mc else None,
                 "correct_option": s.get("correct_option") if mc else None,
                 "is_multi_select": bool(mc and s.get("multi_select")),
                 "needs_drawing": bool(q.get("needs_drawing")),
