@@ -241,12 +241,19 @@ def openrouter_vision(or_key: str, prompt: str, img: bytes) -> str:
                                      headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=300) as r:
-                text = json.load(r)["choices"][0]["message"]["content"] or ""
-            if text.strip():
-                return text
-        except urllib.error.HTTPError as e:
+                data = json.load(r)
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
             last = e
-    raise last or RuntimeError("no OpenRouter vision model returned text")
+            continue
+        # OpenRouter can answer 200 with an error object instead of choices
+        # (daily free limit, busy upstream): count it as this model failing
+        if "choices" not in data:
+            last = RuntimeError(f"{model}: {str(data.get('error') or data)[:200]}")
+            continue
+        text = data["choices"][0]["message"].get("content") or ""
+        if text.strip():
+            return text
+    raise RuntimeError(f"no OpenRouter vision model returned text ({last})")
 
 
 def free_chain(key: str, models: list[str], call) -> tuple[str, str]:
@@ -297,7 +304,13 @@ def stage_ocr(key: str, or_key: str, paper: tuple) -> None:
                 text, model = free_chain(key, VISION_MODELS[:2], lambda m: gemini(key, m, parts, max_tokens=6000,
                                                                                   temperature=0.9, low_thinking=True))
             except FreeExhausted:
-                text, model = openrouter_vision(or_key, OCR_PROMPT, img), OPENROUTER_VISION_MODEL
+                try:
+                    text, model = openrouter_vision(or_key, OCR_PROMPT, img), OPENROUTER_VISION_MODEL
+                except RuntimeError as e:
+                    # leave the page missing: split waits for a complete transcript,
+                    # and the next run retries just this page
+                    print(f"  {pid} page {i + 1}/{len(doc)} SKIPPED (RECITATION, {e})", flush=True)
+                    continue
         f.write_text(text or "（本頁無文字）", encoding="utf-8")
         print(f"  {pid} page {i + 1}/{len(doc)} ok via {model} ({len(text)} chars)", flush=True)
         time.sleep(4)
