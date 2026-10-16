@@ -57,7 +57,93 @@ PAPERS = [
     ("ncku113_ds", "成功大學/資管所/113/113_成大_資料結構.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 113, "資料結構", "DS"),
     ("nthu110_cs", "清華大學/資應所/110/110_清大_計算機概論.pdf", "NTHU", "國立清華大學", "資訊系統與應用研究所", 110, "計算機概論", "CS"),
     ("nycu115_itm", "陽明交大/交大考古/115計概.pdf", "NYCU", "國立陽明交通大學", "資訊管理研究所", 115, "資訊科技與管理", "CS"),
+    # 2026-10-16: the remaining years (scope as in CURRENT_STATUS 6.2.7)
+    ("ntu112_itintro", "臺灣大學/資管所/112/112_臺大_資訊科技概論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 112, "資訊科技概論", "CS"),
+    ("ntu112_imintro", "臺灣大學/資管所/112/112_臺大_資訊管理導論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 112, "資訊管理導論", "MIS"),
+    ("ntu111_itintro", "臺灣大學/資管所/111/111_臺大_資訊科技概論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 111, "資訊科技概論", "CS"),
+    ("ntu111_imintro", "臺灣大學/資管所/111/111_臺大_資訊管理導論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 111, "資訊管理導論", "MIS"),
+    ("ntu110_itintro", "臺灣大學/資管所/110/110_臺大_資訊科技概論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 110, "資訊科技概論", "CS"),
+    ("ntu110_imintro", "臺灣大學/資管所/110/110_臺大_資訊管理導論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 110, "資訊管理導論", "MIS"),
+    ("ntu109_itintro", "臺灣大學/資管所/109/109_臺大_資訊科技概論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 109, "資訊科技概論", "CS"),
+    ("ntu109_imintro", "臺灣大學/資管所/109/109_臺大_資訊管理導論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 109, "資訊管理導論", "MIS"),
+    ("ntu108_itintro", "臺灣大學/資管所/108/108_臺大_資訊科技概論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 108, "資訊科技概論", "CS"),
+    ("ntu108_imintro", "臺灣大學/資管所/108/108_臺大_資訊管理導論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 108, "資訊管理導論", "MIS"),
+    ("ntu107_itintro", "臺灣大學/資管所/107/107_臺大_資訊科技概論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 107, "資訊科技概論", "CS"),
+    ("ntu107_imintro", "臺灣大學/資管所/107/107_臺大_資訊管理導論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 107, "資訊管理導論", "MIS"),
+    ("ntu106_itintro", "臺灣大學/資管所/106/106_臺大_資訊科技概論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 106, "資訊科技概論", "CS"),
+    ("ntu106_imintro", "臺灣大學/資管所/106/106_臺大_資訊管理導論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 106, "資訊管理導論", "MIS"),
+    ("ntu105_itintro", "臺灣大學/資管所/105/105_臺大_資訊科技概論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 105, "資訊科技概論", "CS"),
+    ("ntu105_imintro", "臺灣大學/資管所/105/105_臺大_資訊管理導論.pdf", "NTU", "國立臺灣大學", "資訊管理學系", 105, "資訊管理導論", "MIS"),
+    ("ncku112_mis", "成功大學/資管所/112/112_成大_管理資訊系統.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 112, "管理資訊系統", "MIS"),
+    ("ncku112_cs", "成功大學/資管所/112/112_成大_計算機概論.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 112, "計算機概論", "CS"),
+    ("ncku112_ds", "成功大學/資管所/112/112_成大_資料結構.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 112, "資料結構", "DS"),
+    ("ncku111_mis", "成功大學/資管所/111/111_成大_管理資訊系統.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 111, "管理資訊系統", "MIS"),
+    ("ncku111_cs", "成功大學/資管所/111/111_成大_計算機概論.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 111, "計算機概論", "CS"),
+    ("ncku111_ds", "成功大學/資管所/111/111_成大_資料結構.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 111, "資料結構", "DS"),
+    ("ncku110_mis", "成功大學/資管所/110/110_成大_管理資訊系統.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 110, "管理資訊系統", "MIS"),
+    ("ncku110_cs", "成功大學/資管所/110/110_成大_計算機概論.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 110, "計算機概論", "CS"),
+    ("ncku110_ds", "成功大學/資管所/110/110_成大_資料結構.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 110, "資料結構", "DS"),
+    ("ncku109_mis", "成功大學/資管所/109/109_成大_管理資訊系統.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 109, "管理資訊系統", "MIS"),
+    ("ncku109_cs", "成功大學/資管所/109/109_成大_計算機概論.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 109, "計算機概論", "CS"),
+    ("ncku109_ds", "成功大學/資管所/109/109_成大_資料結構.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 109, "資料結構", "DS"),
+    ("ncku108_mis", "成功大學/資管所/108/108_成大_管理資訊系統.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 108, "管理資訊系統", "MIS"),
+    ("ncku108_cs", "成功大學/資管所/108/108_成大_計算機概論.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 108, "計算機概論", "CS"),
+    ("ncku108_ds", "成功大學/資管所/108/108_成大_資料結構.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 108, "資料結構", "DS"),
+    ("ncku107_mis", "成功大學/資管所/107/107_成大_管理資訊系統.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 107, "管理資訊系統", "MIS"),
+    ("ncku107_cs", "成功大學/資管所/107/107_成大_計算機概論.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 107, "計算機概論", "CS"),
+    ("ncku107_ds", "成功大學/資管所/107/107_成大_資結.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 107, "資料結構", "DS"),
+    ("ncku106_mis", "成功大學/資管所/106/106_成大_管理資訊系統.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 106, "管理資訊系統", "MIS"),
+    ("ncku106_cs", "成功大學/資管所/106/106_成大_計算機概論.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 106, "計算機概論", "CS"),
+    ("ncku106_ds", "成功大學/資管所/106/106_成大_資料結構.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 106, "資料結構", "DS"),
+    ("ncku105_mis", "成功大學/資管所/105/105_成大_管理資訊系統.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 105, "管理資訊系統", "MIS"),
+    ("ncku105_cs", "成功大學/資管所/105/105_成大_計算機概論.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 105, "計算機概論", "CS"),
+    ("ncku105_ds", "成功大學/資管所/105/105_成大_資料結構.pdf", "NCKU", "國立成功大學", "資訊管理研究所", 105, "資料結構", "DS"),
+    ("nccu112_cs_tech", "政治大學/資管所/112/112_政大_科技組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（科技組）", 112, "計算機概論", "CS"),
+    ("nccu112_cs_mgmt", "政治大學/資管所/112/112_政大_管理組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（管理組）", 112, "計算機概論", "CS"),
+    ("nccu112_mis", "政治大學/資管所/112/112_政大_管理資訊系統.pdf", "NCCU", "國立政治大學", "資訊管理學系", 112, "管理資訊系統", "MIS"),
+    ("nccu112_ds", "政治大學/資管所/112/112_政大_資料結構.pdf", "NCCU", "國立政治大學", "資訊管理學系", 112, "資料結構", "DS"),
+    ("nccu111_cs_tech", "政治大學/資管所/111/111_政大_科技組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（科技組）", 111, "計算機概論", "CS"),
+    ("nccu111_cs_mgmt", "政治大學/資管所/111/111_政大_管理組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（管理組）", 111, "計算機概論", "CS"),
+    ("nccu111_mis", "政治大學/資管所/111/111_政大_管理資訊系統.pdf", "NCCU", "國立政治大學", "資訊管理學系", 111, "管理資訊系統", "MIS"),
+    ("nccu111_ds", "政治大學/資管所/111/111_政大_資料結構.pdf", "NCCU", "國立政治大學", "資訊管理學系", 111, "資料結構", "DS"),
+    ("nccu110_cs_tech", "政治大學/資管所/110/110_政大_科技組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（科技組）", 110, "計算機概論", "CS"),
+    ("nccu110_cs_mgmt", "政治大學/資管所/110/110_政大_管理組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（管理組）", 110, "計算機概論", "CS"),
+    ("nccu110_mis", "政治大學/資管所/110/110_政大_管理資訊系統.pdf", "NCCU", "國立政治大學", "資訊管理學系", 110, "管理資訊系統", "MIS"),
+    ("nccu110_ds", "政治大學/資管所/110/110_政大_資料結構.pdf", "NCCU", "國立政治大學", "資訊管理學系", 110, "資料結構", "DS"),
+    ("nccu109_cs_tech", "政治大學/資管所/109/109_政大_科技組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（科技組）", 109, "計算機概論", "CS"),
+    ("nccu109_cs_mgmt", "政治大學/資管所/109/109_政大_管理組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（管理組）", 109, "計算機概論", "CS"),
+    ("nccu109_mis", "政治大學/資管所/109/109_政大_管理資訊系統.pdf", "NCCU", "國立政治大學", "資訊管理學系", 109, "管理資訊系統", "MIS"),
+    ("nccu109_ds", "政治大學/資管所/109/109_政大_資料結構.pdf", "NCCU", "國立政治大學", "資訊管理學系", 109, "資料結構", "DS"),
+    ("nccu108_cs_tech", "政治大學/資管所/108/108_政大_科技組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（科技組）", 108, "計算機概論", "CS"),
+    ("nccu108_cs_mgmt", "政治大學/資管所/108/108_政大_管理組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（管理組）", 108, "計算機概論", "CS"),
+    ("nccu108_mis", "政治大學/資管所/108/108_政大_管理資訊系統.pdf", "NCCU", "國立政治大學", "資訊管理學系", 108, "管理資訊系統", "MIS"),
+    ("nccu108_ds", "政治大學/資管所/108/108_政大_資料結構.pdf", "NCCU", "國立政治大學", "資訊管理學系", 108, "資料結構", "DS"),
+    ("nccu107_cs_tech", "政治大學/資管所/107/107_政大_科技組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（科技組）", 107, "計算機概論", "CS"),
+    ("nccu107_cs_mgmt", "政治大學/資管所/107/107_政大_管理組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（管理組）", 107, "計算機概論", "CS"),
+    ("nccu107_mis", "政治大學/資管所/107/107_政大_管理資訊系統.pdf", "NCCU", "國立政治大學", "資訊管理學系", 107, "管理資訊系統", "MIS"),
+    ("nccu107_ds", "政治大學/資管所/107/107_政大_資料結構.pdf", "NCCU", "國立政治大學", "資訊管理學系", 107, "資料結構", "DS"),
+    ("nccu106_cs_tech", "政治大學/資管所/106/106_政大_科技組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（科技組）", 106, "計算機概論", "CS"),
+    ("nccu106_cs_mgmt", "政治大學/資管所/106/106_政大_管理組_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系（管理組）", 106, "計算機概論", "CS"),
+    ("nccu106_mis", "政治大學/資管所/106/106_政大_管理資訊系統.pdf", "NCCU", "國立政治大學", "資訊管理學系", 106, "管理資訊系統", "MIS"),
+    ("nccu106_ds", "政治大學/資管所/106/106_政大_資料結構.pdf", "NCCU", "國立政治大學", "資訊管理學系", 106, "資料結構", "DS"),
+    ("nccu105_cs", "政治大學/資管所/105/105_政大_計算機概論.pdf", "NCCU", "國立政治大學", "資訊管理學系", 105, "計算機概論", "CS"),
+    ("nccu105_mis", "政治大學/資管所/105/105_政大_管理資訊系統.pdf", "NCCU", "國立政治大學", "資訊管理學系", 105, "管理資訊系統", "MIS"),
+    ("nccu105_ds", "政治大學/資管所/105/105_政大_資料結構.pdf", "NCCU", "國立政治大學", "資訊管理學系", 105, "資料結構", "DS"),
+    ("nthu109_cs", "清華大學/資應所/109/109_清大_計算機概論.pdf", "NTHU", "國立清華大學", "資訊系統與應用研究所", 109, "計算機概論", "CS"),
+    ("nthu108_cs", "清華大學/資應所/108/108_清大_計算機概論.pdf", "NTHU", "國立清華大學", "資訊系統與應用研究所", 108, "計算機概論", "CS"),
+    ("nthu107_cs", "清華大學/資應所/107/107_清大_計算機概論.pdf", "NTHU", "國立清華大學", "資訊系統與應用研究所", 107, "計算機概論", "CS"),
+    ("nthu106_cs", "清華大學/資應所/106/106_清大_計算機概論.pdf", "NTHU", "國立清華大學", "資訊系統與應用研究所", 106, "計算機概論", "CS"),
+    ("nthu105_cs", "清華大學/資應所/105/105_清大_計算機概論.pdf", "NTHU", "國立清華大學", "資訊系統與應用研究所", 105, "計算機概論", "CS"),
+    ("nycu114_itm", "陽明交大/交大考古/114計概.pdf", "NYCU", "國立陽明交通大學", "資訊管理研究所", 114, "資訊科技與管理", "CS"),
+    ("nycu113_itm", "陽明交大/交大考古/交大113考古題.pdf", "NYCU", "國立陽明交通大學", "資訊管理研究所", 113, "資訊科技與管理", "CS"),
+    ("nycu109_mis", "陽明交大/交大考古/交大資管MIS109.pdf", "NYCU", "國立陽明交通大學", "資訊管理研究所（乙組）", 109, "管理資訊系統", "MIS"),
+    ("nycu102_cs_a", "陽明交大/資管所/102/102_交大_甲組_計算機概論(1).pdf", "NYCU", "國立陽明交通大學", "資訊管理研究所（甲組）", 102, "計算機概論", "CS"),
+    ("nycu102_cs_b", "陽明交大/資管所/102/102_交大_甲組_計算機概論.pdf", "NYCU", "國立陽明交通大學", "資訊管理研究所（乙組）", 102, "計算機概論", "CS"),
+    ("nycu102_mis", "陽明交大/資管所/102/102_交大_管理資訊系統.pdf", "NYCU", "國立陽明交通大學", "資訊管理研究所", 102, "管理資訊系統", "MIS"),
+    ("nycu102_dsnet", "陽明交大/資管所/102/102_交大_資料結構與網際網路概論.pdf", "NYCU", "國立陽明交通大學", "資訊管理研究所", 102, "資料結構與網際網路概論", "DS"),
 ]
+# The first 11 papers were published (and hand-checked) before the check stage existed.
+CHECKED_PAPERS = PAPERS[11:]
 
 # Free-tier Gemini models, each with its own daily quota on the same project.
 # Ordered fastest-first (2026-10-15 timing: 3-flash-preview ~5s/page, 3.1-flash-lite ~4s;
@@ -433,6 +519,61 @@ def stage_solve(key: str, groq_key: str, paper: tuple) -> None:
         time.sleep(1)
 
 
+# ---------------------------------------------------------------- check
+# AI-written solutions to computable questions were wrong 5 times out of 13
+# when checked by hand (CURRENT_STATUS 6.2.7), and grading uses the solution
+# as the answer key. So every computable non-MC solution gets an independent
+# review by a different model; ones judged wrong are held back from publishing.
+COMPUTABLE = re.compile(
+    r"走訪|traversal|DFS|BFS|排序|sort|最短路徑|shortest path|生成樹|spanning tree|Prim|Kruskal|Dijkstra|"
+    r"雜湊|hash|heap|堆積|AVL|B-?tree|B\+?樹|二元搜尋樹|binary search tree|複雜度|complexity|Big-?O|"
+    r"postfix|prefix|infix|後序|前序|中序|page fault|分頁|頁框|cache|快取|TLB|排程|scheduling|Gantt|"
+    r"subnet|子網|補數|complement|浮點|floating|二進位|binary|十六進位|hexadecimal|正規化|normal form|"
+    r"\bSQL\b|計算|compute|calculate|多少", re.I)
+
+CHECK_SYSTEM = """你是嚴格的閱卷老師。你會拿到一道台灣資管所研究所考題和一份參考詳解。
+請先自己獨立把題目算一遍（走訪順序、排序過程、最短路徑、生成樹、雜湊、複雜度、位址或數值計算等），再逐一比對參考詳解每一小題的最後答案與關鍵步驟。
+只輸出 JSON（無 markdown 圍欄）：{"verdict": "correct|incorrect|unsure", "issues": "若為 incorrect：哪一小題、參考詳解寫了什麼、正確應該是什麼；其他情況給空字串"}
+規則：只有在你有把握參考詳解的答案是錯的（不是寫法不同、多寫或少寫解釋）時才判 incorrect；題目資訊不足或你自己也不確定時判 unsure。"""
+
+
+def is_computable(q: dict) -> bool:
+    return q.get("type") != "multiple_choice" and (q.get("type") == "calculation" or bool(COMPUTABLE.search(q.get("text", ""))))
+
+
+def stage_check(key: str, groq_key: str, paper: tuple) -> None:
+    pid, _rel, _code, school_name, _dept, year, subject, _t = paper
+    split_f, solve_f, check_f = WORK / pid / "split.json", WORK / pid / "solve.json", WORK / pid / "check.json"
+    if not (split_f.exists() and solve_f.exists()):
+        return
+    qs = json.loads(split_f.read_text(encoding="utf-8"))["questions"]
+    sols = json.loads(solve_f.read_text(encoding="utf-8"))
+    checks = json.loads(check_f.read_text(encoding="utf-8")) if check_f.exists() else {}
+    for q in qs:
+        num = q["idx"]
+        if num in checks or num not in sols or not is_computable(q):
+            continue
+        user = (f"【{year} 學年度 {school_name} 資管所 {subject}】\n題目：\n{q['text']}\n\n"
+                f"參考詳解：\n{sols[num]['solution_text']}")
+        solver = (sols[num].get("models") or [None])[0]
+        verdict, vmodel = None, None
+        for m in GROQ_CROSS_CHECK:  # a different provider from the Gemini solver first
+            try:
+                verdict, vmodel = groq_call(groq_key, m, CHECK_SYSTEM, user), m
+                break
+            except Exception:
+                continue
+        if verdict is None:
+            others = [m for m in TEXT_MODELS if m != solver]
+            verdict, vmodel = free_chain(key, others, lambda mm: gemini_json(key, mm, user, CHECK_SYSTEM, 12000))
+        v = str(verdict.get("verdict", "unsure")).strip().lower()
+        checks[num] = {"verdict": v if v in ("correct", "incorrect", "unsure") else "unsure",
+                       "issues": str(verdict.get("issues") or "").strip(), "model": vmodel}
+        check_f.write_text(json.dumps(checks, ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"  {pid} #{num} (q{q.get('number')}) check: {checks[num]['verdict']}", flush=True)
+        time.sleep(1)
+
+
 # ---------------------------------------------------------------- report / publish
 def plan(paper: tuple) -> tuple[list, list]:
     pid = paper[0]
@@ -441,6 +582,8 @@ def plan(paper: tuple) -> tuple[list, list]:
         return [], []
     qs = json.loads(split_f.read_text(encoding="utf-8"))["questions"]
     sols = json.loads(solve_f.read_text(encoding="utf-8")) if solve_f.exists() else {}
+    check_f = WORK / pid / "check.json"
+    checks = json.loads(check_f.read_text(encoding="utf-8")) if check_f.exists() else {}
     ready, held = [], []
     for q in qs:
         num = q["idx"]
@@ -451,6 +594,10 @@ def plan(paper: tuple) -> tuple[list, list]:
             reason = f"text not found in transcript (fidelity {q.get('fidelity')})"
         elif num not in sols:
             reason = "no solution yet"
+        elif paper in CHECKED_PAPERS and is_computable(q) and num not in checks:
+            reason = "computable: not checked yet"
+        elif checks.get(num, {}).get("verdict") == "incorrect":
+            reason = f"check says solution is wrong ({checks[num]['model']}): {checks[num]['issues'][:160]}"
         (held if reason else ready).append((q, sols.get(num), reason))
     return ready, held
 
@@ -584,7 +731,7 @@ def stage_publish(env_root: dict, papers: list) -> None:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stage", required=True, choices=["ocr", "split", "reflag", "solve", "report", "publish"])
+    ap.add_argument("--stage", required=True, choices=["ocr", "split", "reflag", "solve", "check", "report", "publish"])
     ap.add_argument("--paper", default="")
     args = ap.parse_args()
     papers = [p for p in PAPERS if not args.paper or p[0] == args.paper]
@@ -605,6 +752,9 @@ def main() -> None:
         elif args.stage == "solve":
             for p in papers:
                 stage_solve(key, env_web["GROQ_API_KEY"], p)
+        elif args.stage == "check":
+            for p in papers:
+                stage_check(key, env_web["GROQ_API_KEY"], p)
         elif args.stage == "report":
             stage_report(papers)
         elif args.stage == "publish":
