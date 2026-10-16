@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TextInput, Pressable, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Alert,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import RichText from "../../components/RichText";
@@ -63,6 +63,22 @@ function QuestionView({ id, savedAttemptId, randomMode }: { id: number; savedAtt
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [draftReady, setDraftReady] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
+
+  // Leaving with typed but unsent text asks first (back button, Android back,
+  // 再抽一題). Nothing typed yet, or already submitted: leave right away.
+  const navigation = useNavigation();
+  const hasUnsentText = !submitted && answer.trim().length > 0;
+  useEffect(() => {
+    if (!hasUnsentText) return;
+    return navigation.addListener("beforeRemove", (e) => {
+      e.preventDefault();
+      Alert.alert("還沒送出，要離開嗎？", "你寫的內容會先存成草稿，下次打開這題會自動恢復。", [
+        { text: "繼續作答", style: "cancel" },
+        // re-dispatching the same action doesn't ask again (already marked as handled)
+        { text: "離開", style: "destructive", onPress: () => navigation.dispatch(e.data.action) },
+      ]);
+    });
+  }, [navigation, hasUnsentText]);
 
   useEffect(() => {
     Promise.all([
