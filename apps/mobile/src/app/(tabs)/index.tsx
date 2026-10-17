@@ -7,7 +7,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LegalLinks } from "../../components/LegalLinks";
 import { getDailyTasks } from "../../lib/daily";
 import { getAnalytics } from "../../lib/analytics";
-import { deleteAccount, logout } from "../../lib/account";
 import { PLACEMENT_QUESTIONS } from "../../lib/scoring";
 import { supabase } from "../../lib/supabase";
 import { randomQuestionId } from "../../lib/random";
@@ -69,23 +68,6 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const confirmDelete = () =>
-    Alert.alert("刪除帳號", "你的帳號和所有作答紀錄會永久刪除，無法復原。確定要刪除嗎？", [
-      { text: "取消", style: "cancel" },
-      {
-        text: "永久刪除",
-        style: "destructive",
-        onPress: () => deleteAccount().catch((e: Error) => Alert.alert("刪除失敗", e.message)),
-      },
-    ]);
-
-  const openAccountMenu = () =>
-    Alert.alert("帳號", undefined, [
-      { text: "登出", onPress: () => logout() },
-      { text: "刪除帳號", style: "destructive", onPress: confirmDelete },
-      { text: "取消", style: "cancel" },
-    ]);
-
   const [now] = useState(() => Date.now());
   const daysLeft = Math.max(0, Math.ceil((EXAM_DATE.getTime() - now) / 86_400_000));
   const doneCount = daily?.filter((d) => d.done_today).length ?? 0;
@@ -116,8 +98,9 @@ export default function HomeScreen() {
           <View style={styles.logo}><Text style={styles.logoText}>研</Text></View>
           <Text style={styles.brandText}>考研教練</Text>
         </View>
-        <Pressable style={styles.iconButton} onPress={openAccountMenu}>
-          <Ionicons name="log-out-outline" size={18} color={colors.ink2} />
+        {/* 登出 / 刪除帳號 live on the account page, where a guest gets 建立帳號 instead of 登出 */}
+        <Pressable style={styles.iconButton} onPress={() => router.push("/account")} accessibilityLabel="帳號">
+          <Ionicons name="person-outline" size={17} color={colors.ink2} />
         </Pressable>
       </View>
 
