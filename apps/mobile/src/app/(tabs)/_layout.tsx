@@ -31,10 +31,6 @@ export default function TabsLayout() {
         options={{ title: "首頁", tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} /> }}
       />
       <Tabs.Screen
-        name="practice"
-        options={{ title: "練習", tabBarIcon: ({ color, size }) => <Ionicons name="create-outline" size={size} color={color} /> }}
-      />
-      <Tabs.Screen
         name="bank"
         options={{ title: "題庫", tabBarIcon: ({ color, size }) => <Ionicons name="library-outline" size={size} color={color} /> }}
       />

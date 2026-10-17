@@ -15,7 +15,7 @@ const DAILY_TOPICS = ["CS", "DS"];
 const SLOTS = { review: 2, weak: 6, unseen: 2 };
 const TOTAL = SLOTS.review + SLOTS.weak + SLOTS.unseen;
 const DAY_MS = 86_400_000;
-const QUESTION_COLUMNS = "id, question_text, question_type, topic, subtopic, concepts, difficulty, correct_option";
+const QUESTION_COLUMNS = "id, question_text, question_type, topic, subtopic, concepts, difficulty, correct_option, school, exam_year";
 
 interface CachedDaily {
   date: string;

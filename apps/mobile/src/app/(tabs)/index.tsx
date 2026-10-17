@@ -4,7 +4,8 @@ import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl, Alert } 
 import { useFocusEffect, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LegalLinks } from "../../components/LegalLinks";
+import { ReadinessRuler } from "../../components/ReadinessRuler";
+import { SLOT_LABELS, SLOT_ORDER, TodayRow } from "../../components/TodayRow";
 import { getDailyTasks } from "../../lib/daily";
 import { getAnalytics } from "../../lib/analytics";
 import { PLACEMENT_QUESTIONS } from "../../lib/scoring";
@@ -14,13 +15,8 @@ import { colors, radius, spacing, typography } from "../../lib/theme";
 import type { Analytics, DailyItem } from "../../lib/types";
 
 const EXAM_DATE = new Date("2027-02-01T00:00:00+08:00");
-
-const SLOT_META: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string; bg: string; line: string }> = {
-  review: { label: "到期複習", icon: "refresh-outline", color: "#92400E", bg: colors.warningSoft, line: colors.warningLine },
-  weak: { label: "弱點加強", icon: "locate-outline", color: "#991B1B", bg: colors.dangerSoft, line: colors.dangerLine },
-  unseen: { label: "新題", icon: "add-circle-outline", color: "#1E40AF", bg: colors.infoSoft, line: colors.infoLine },
-  extra: { label: "加練", icon: "ellipsis-horizontal-circle-outline", color: colors.ink2, bg: "#F4F4F5", line: colors.line },
-};
+/** Upcoming questions listed on home; the whole day is behind 看今天全部. */
+const LIST_LIMIT = 4;
 
 /** One-time reveal once any 5 answers have been scored. */
 async function announcePlacementOnce(percent: number, average: number | null) {
@@ -38,6 +34,11 @@ async function announcePlacementOnce(percent: number, average: number | null) {
   }
 }
 
+/**
+ * Home, design C (2026-10-17, https://claude.ai/artifact/Kk4nQvpw9tjDdKSHbhDL5L):
+ * readiness on a tick ruler, then today's next few questions to pick from,
+ * one main button, and 隨機一題. No explanatory captions.
+ */
 export default function HomeScreen() {
   const router = useRouter();
   const [daily, setDaily] = useState<DailyItem[] | null>(null);
@@ -70,17 +71,17 @@ export default function HomeScreen() {
 
   const [now] = useState(() => Date.now());
   const daysLeft = Math.max(0, Math.ceil((EXAM_DATE.getTime() - now) / 86_400_000));
-  const doneCount = daily?.filter((d) => d.done_today).length ?? 0;
-  const firstUndone = daily?.find((d) => !d.done_today);
 
-  const bySlot = { review: 0, weak: 0, unseen: 0 };
-  for (const d of daily ?? []) if (d.slot in bySlot) bySlot[d.slot as keyof typeof bySlot]++;
+  const undone = daily?.filter((d) => !d.done_today) ?? [];
+  // the next few still to do; once everything is done, the day's first few with their ✓
+  const listed = (undone.length > 0 ? undone : daily ?? []).slice(0, LIST_LIMIT);
+  const composition = SLOT_ORDER
+    .map((slot) => ({ slot, count: daily?.filter((d) => d.slot === slot).length ?? 0 }))
+    .filter((c) => c.count > 0);
 
   const readiness = stats?.readiness;
   const placing = readiness ? readiness.percent === null : false;
   const placedCount = Math.min(readiness?.scoredQuestions ?? 0, PLACEMENT_QUESTIONS);
-
-  const ctaText = doneCount === 0 ? "開始今天的練習 →" : `繼續練習（剩 ${(daily?.length ?? 0) - doneCount} 題）→`;
 
   const [drawing, setDrawing] = useState(false);
   const openRandom = async () => {
@@ -109,68 +110,73 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.hero}>
-          <Text style={styles.heroLabel}>距筆試（約 2027/2）還有 {daysLeft} 天</Text>
-          <View style={styles.heroRow}>
-            <View style={styles.ring}>
+          <View style={styles.heroTop}>
+            <View style={styles.heroMain}>
+              <Text style={styles.heroLabel}>考前準備度</Text>
               {readiness?.percent != null ? (
-                <Text style={styles.ringText}>{readiness.percent}%</Text>
+                <View style={styles.numberRow}>
+                  <Text style={styles.number}>{readiness.percent}</Text>
+                  <Text style={styles.percentSign}>%</Text>
+                </View>
               ) : (
-                <Text style={styles.ringTextSmall}>{readiness ? "未定位" : "—"}</Text>
+                <Text style={styles.unplaced}>{readiness ? `寫任意 ${PLACEMENT_QUESTIONS} 題就會出現` : " "}</Text>
               )}
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.heroSub}>考前準備度</Text>
-              <Text style={styles.heroDesc}>
-                {!stats
-                  ? " "
-                  : placing
-                    ? `寫任意 ${PLACEMENT_QUESTIONS} 題就會出現你的考前準備度（還差 ${PLACEMENT_QUESTIONS - placedCount} 題）。`
-                    : `累積作答 ${stats.totalAttempts} 題，AI 批改 ${stats.aiGraded} 題。`}
-              </Text>
-              {!placing && stats?.readinessAverage != null && (
-                <Text style={styles.heroAverage}>所有使用者平均 {stats.readinessAverage}%</Text>
+            <View style={styles.heroSide}>
+              {stats && (
+                <Text style={styles.heroSideText}>
+                  {placing ? `還差 ${PLACEMENT_QUESTIONS - placedCount} 題` : `寫過 ${stats.questionsAnswered} 題`}
+                </Text>
               )}
+              <Text style={styles.heroSideText}>距筆試 {daysLeft} 天</Text>
             </View>
           </View>
+          <ReadinessRuler
+            percent={readiness?.percent ?? null}
+            average={placing ? null : stats?.readinessAverage ?? null}
+          />
         </View>
 
-        <View style={styles.card}>
-          <View>
-            <Text style={styles.cardTitle}>今天練什麼</Text>
-            <Text style={styles.cardSub}>依到期複習 → 弱點 → 新題排序，不是隨機出題</Text>
+        <View style={styles.today}>
+          <View style={styles.todayHeader}>
+            <Text style={styles.todayTitle}>今天練什麼</Text>
+            {composition.length > 0 && (
+              <Text style={styles.composition}>
+                {composition.map((c, i) => (
+                  <Text key={c.slot}>
+                    {i > 0 ? " · " : ""}
+                    {SLOT_LABELS[c.slot]} <Text style={styles.compositionCount}>{c.count}</Text>
+                  </Text>
+                ))}
+              </Text>
+            )}
           </View>
-
-          {(["review", "weak", "unseen"] as const).map((slot) => {
-            const meta = SLOT_META[slot];
-            const count = bySlot[slot];
-            if (!count) return null;
-            return (
-              <Pressable
-                key={slot}
-                style={[styles.slotRow, { backgroundColor: meta.bg, borderColor: meta.line }]}
-                onPress={() => {
-                  const item = daily?.find((d) => d.slot === slot && !d.done_today);
-                  if (item) router.push(`/question/${item.id}`);
-                }}
-              >
-                <View style={[styles.slotIcon, { backgroundColor: "#fff" }]}>
-                  <Ionicons name={meta.icon} size={15} color={meta.color} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.slotLabel, { color: meta.color }]}>{meta.label} · {count} 題</Text>
-                </View>
-              </Pressable>
-            );
-          })}
 
           {daily === null ? (
             <Text style={styles.loadingText}>載入中…</Text>
-          ) : firstUndone ? (
-            <Pressable style={styles.cta} onPress={() => router.push(`/question/${firstUndone.id}`)}>
-              <Text style={styles.ctaText}>{ctaText}</Text>
-            </Pressable>
+          ) : daily.length === 0 ? (
+            <Text style={styles.loadingText}>今天沒有題目</Text>
           ) : (
-            <View style={styles.doneBanner}><Text style={styles.doneText}>今日任務完成！</Text></View>
+            <>
+              <View style={styles.list}>
+                {listed.map((item) => (
+                  <TodayRow key={item.id} item={item} divider />
+                ))}
+                <Pressable style={styles.listFooter} onPress={() => router.push("/today")}>
+                  <Text style={styles.listFooterText}>看今天全部 {daily.length} 題</Text>
+                </Pressable>
+              </View>
+              {undone.length > 0 ? (
+                <Pressable style={styles.cta} onPress={() => router.push(`/question/${undone[0].id}`)}>
+                  <Text style={styles.ctaText}>從第一題開始</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.doneRow}>
+                  <Text style={styles.doneCheck}>✓</Text>
+                  <Text style={styles.doneText}>今天的 {daily.length} 題都寫完了</Text>
+                </View>
+              )}
+            </>
           )}
         </View>
 
@@ -178,14 +184,9 @@ export default function HomeScreen() {
           <View style={styles.randomIcon}>
             <Ionicons name="shuffle" size={16} color={colors.accent} />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.randomTitle}>{drawing ? "抽題中…" : "隨機一題"}</Text>
-            <Text style={styles.randomSub}>從整個題庫隨機抽，跟每日練習分開</Text>
-          </View>
+          <Text style={styles.randomTitle}>{drawing ? "抽題中…" : "隨機一題"}</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.ink3} />
         </Pressable>
-
-        <LegalLinks />
       </ScrollView>
     </SafeAreaView>
   );
@@ -200,28 +201,31 @@ const styles = StyleSheet.create({
   brandText: { ...typography.h2 },
   iconButton: { width: 34, height: 34, borderRadius: radius.full, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   content: { padding: spacing.xl, paddingTop: spacing.xs, gap: spacing.lg, paddingBottom: spacing.xxl },
-  hero: { backgroundColor: colors.accent, borderRadius: radius.xxl, padding: spacing.xl, gap: spacing.lg },
-  heroLabel: { color: "rgba(255,255,255,0.75)", fontSize: 12 },
-  heroRow: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
-  ring: { width: 64, height: 64, borderRadius: radius.full, borderWidth: 4, borderColor: "rgba(255,255,255,0.3)", alignItems: "center", justifyContent: "center" },
-  ringText: { color: "#fff", fontSize: 16, fontWeight: "800" },
-  randomRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: spacing.lg },
-  randomIcon: { width: 32, height: 32, borderRadius: radius.full, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
-  randomTitle: { fontSize: 14, fontWeight: "800", color: colors.ink },
-  randomSub: { fontSize: 11, color: colors.ink3, marginTop: 2 },
-  ringTextSmall: { color: "#fff", fontSize: 13, fontWeight: "800" },
-  heroSub: { color: "rgba(255,255,255,0.75)", fontSize: 12, marginBottom: 3 },
-  heroDesc: { color: "#fff", fontSize: 13, lineHeight: 19 },
-  heroAverage: { color: "rgba(255,255,255,0.75)", fontSize: 11.5, marginTop: 4 },
-  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.md },
-  cardTitle: { ...typography.h2 },
-  cardSub: { ...typography.tiny, color: colors.ink3, marginTop: 2 },
-  slotRow: { flexDirection: "row", alignItems: "center", gap: 11, padding: 11, borderRadius: radius.md, borderWidth: 1 },
-  slotIcon: { width: 30, height: 30, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
-  slotLabel: { fontSize: 13.5, fontWeight: "700" },
+  hero: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.xl, paddingTop: spacing.lg, paddingHorizontal: spacing.xl, paddingBottom: 18 },
+  heroTop: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.md },
+  heroMain: { flexShrink: 1 },
+  heroLabel: { fontSize: 12.5, fontWeight: "600", color: colors.ink2 },
+  numberRow: { flexDirection: "row", alignItems: "baseline", marginTop: 2 },
+  number: { fontSize: 34, lineHeight: 40, fontWeight: "800", letterSpacing: -1, color: colors.ink, fontVariant: ["tabular-nums"] },
+  percentSign: { fontSize: 16, fontWeight: "700", color: colors.ink2, marginLeft: 2 },
+  unplaced: { marginTop: 8, fontSize: 15, lineHeight: 22, fontWeight: "700", color: colors.ink },
+  heroSide: { alignItems: "flex-end" },
+  heroSideText: { fontSize: 12, lineHeight: 19, color: colors.ink2 },
+  today: { gap: 10 },
+  todayHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", paddingHorizontal: 2 },
+  todayTitle: { ...typography.h2, color: colors.ink },
+  composition: { fontSize: 12, color: colors.ink2 },
+  compositionCount: { fontWeight: "700", color: colors.ink },
+  list: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, overflow: "hidden" },
+  listFooter: { minHeight: 44, alignItems: "center", justifyContent: "center", paddingVertical: spacing.md },
+  listFooterText: { fontSize: 13.5, fontWeight: "600", color: colors.accent },
   loadingText: { textAlign: "center", color: colors.ink3, paddingVertical: spacing.xl },
-  cta: { backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: 13, alignItems: "center", marginTop: spacing.xs },
-  ctaText: { color: "#fff", fontWeight: "700", fontSize: 14 },
-  doneBanner: { backgroundColor: colors.successSoft, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center" },
-  doneText: { color: colors.success, fontWeight: "700", fontSize: 14 },
+  cta: { height: 48, borderRadius: radius.md, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
+  ctaText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  doneRow: { height: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm },
+  doneCheck: { fontSize: 15, fontWeight: "700", color: colors.success },
+  doneText: { fontSize: 15, fontWeight: "700", color: colors.ink },
+  randomRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, paddingVertical: 14, paddingHorizontal: spacing.lg },
+  randomIcon: { width: 32, height: 32, borderRadius: radius.full, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
+  randomTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.ink },
 });
