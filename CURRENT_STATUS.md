@@ -435,9 +435,8 @@ Claude 的看法（待開發者回應）：
   - 資料：那一筆（attempt 70）的 `ai_score`、`ai_feedback` 已清空，作答內容保留，開發者可以重新批改；原本的批改內容另存在 Claude 的暫存資料夾。
 - **開發者的觀察（討論中）**：上架後可能不能再用免費 Groq 當批改主力，開發者自己用就會撞到用量上限。數據：付費 Gemini 到目前共被呼叫 6 次、約 US$0.004；其中 2 次是 Groq 撞到每分鐘上限才轉過去（含這次）。Groq 的 `gpt-oss-120b` 會先推理再回答，推理的部分應該也算進用量，一次完整批改（批改＋重批＋檢查）就可能用掉大半個每分鐘上限。
 - **2026-10-19 開發者同意改成「付費 Gemini 優先」**：已設定 `GRADER_PRIMARY=gemini`（不用重新部署）。線上實測（臨時帳號、用 attempt 70 的作答，測完刪除）：由 Gemini 批改、5.8 秒、六個欄位齊全且存檔正確，一次完整批改（批改＋檢查）約 US$0.0017；那份作答拿到 5 分（扣分在 `for` 裡重複 `i++`／`j++`、k=1 沒處理、可能越界）。
-- **待開發者決定**：
-  1. 目前的程式在 `GRADER_PRIMARY=gemini` 下完全不用 Groq，Gemini 出錯就直接回「暫時無法使用」。要不要補上「Gemini 出錯時改用 Groq」（改 `grade-attempt`）。
-  2. 隱私權政策（`kaoyan-coach-legal/privacy.html`、`隱私權政策_貼到Google文件.txt`）與 App 的 AI 批改同意說明（`lib/consent.ts`）還寫「Groq 為主，忙碌時改用 Gemini」，要改成 Gemini 為主。
+- **Groq 備援（開發者 2026-10-19：「如果 Groq 品質跟 Gemini 齊平、不要輸太多，那是可以的」）**：目前的程式在 `GRADER_PRIMARY=gemini` 下完全不用 Groq，Gemini 出錯就直接回「暫時無法使用」。先用開發者自己的作答做 Groq 與 Gemini 的批改比較（同一組固定測試答案，也是 6.3 要用的那組），品質差不多才補上「Gemini 出錯時改用 Groq」（改 `grade-attempt`）；差太多就不用 Groq，隱私權政策把它拿掉（拿掉不需要重新徵求同意）。
+- **隱私權政策已更新（2026-10-19，開發者同意）**：Google Gemini 付費服務改寫成 AI 批改的主要服務，Groq 寫成「可能在 Gemini 暫時無法使用時作為備援」（兩家服務沒變，所以已同意 AI 批改的人不用重新同意，`CONSENT_VERSION` 維持 2）；「只存在手機上」的資料加上首頁的題目來源設定；生效日期改為 10 月 19 日。`kaoyan-coach-legal/privacy.html`（已推上 GitHub Pages，commit 310c2ca）、`隱私權政策_貼到Google文件.txt`（**開發者要重新貼到 Google 文件**，見 T15）、App 的 AI 批改同意說明 `lib/consent.ts`（OTA）。
 
 ### 6.3 批改 prompt 要加的規則
 

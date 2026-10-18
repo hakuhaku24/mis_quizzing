@@ -7,7 +7,8 @@ import { supabase } from "./supabase";
  * the paid Gemini fallback is enabled) so everyone is asked again.
  */
 const CONSENT_VERSION = 2;
-export const AI_PROVIDERS = "Groq；Groq 忙碌時改用 Google Gemini 付費服務";
+// Same two providers as before (Gemini first since 2026-10-19), so no new consent is needed.
+export const AI_PROVIDERS = "Google Gemini 付費服務；Gemini 暫時無法使用時可能改用 Groq";
 
 export const CONSENT_TITLE = "AI 批改說明";
 export const CONSENT_MESSAGE =
