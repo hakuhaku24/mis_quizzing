@@ -261,14 +261,33 @@ OPENROUTER_VISION_MODELS = ["google/gemma-4-31b-it:free", "google/gemma-4-26b-a4
                             "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"]
 OPENROUTER_VISION_MODEL = "openrouter-free-vision"
 
+# The open models sometimes answer with their own reasoning ("The user wants me
+# to transcribe…") and loop until the length limit, or stop after a few lines
+# (2026-10-18: 12 of 29 fallback pages; real pages are at most ~5k characters).
+MAX_PAGE_CHARS = 12000
+SELF_TALK = re.compile(r"^\W*(?:The user (?:wants|is asking|has provided)|I need to|Let me |Okay|Alright|We need to)", re.I)
+
+
+def transcript_problem(text: str, finish_reason: str | None) -> str | None:
+    if finish_reason not in (None, "stop"):
+        return f"finish_reason {finish_reason}"
+    if len(text) > MAX_PAGE_CHARS:
+        return f"{len(text)} chars, too long for one page"
+    if SELF_TALK.match(text):
+        return "wrote its reasoning instead of the transcript"
+    if "<unk>" in text:
+        return "<unk> tokens"
+    return None
+
 
 def openrouter_vision(or_key: str, prompt: str, img: bytes) -> str:
     """Last-resort OCR: open models have no RECITATION filter. Uses the
     OpenRouter free allowance (50 requests/day without credits); a busy
-    upstream (429) just moves on to the next free vision model."""
+    upstream (429) or an unusable transcript moves on to the next free
+    vision model."""
     last = None
     for model in OPENROUTER_VISION_MODELS:
-        body = {"model": model, "temperature": 0.1, "messages": [{"role": "user", "content": [
+        body = {"model": model, "temperature": 0.1, "max_tokens": 6000, "messages": [{"role": "user", "content": [
             {"type": "text", "text": prompt},
             {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(img).decode()}},
         ]}]}
@@ -285,9 +304,13 @@ def openrouter_vision(or_key: str, prompt: str, img: bytes) -> str:
         if "choices" not in data:
             last = RuntimeError(f"{model}: {str(data.get('error') or data)[:200]}")
             continue
-        text = data["choices"][0]["message"].get("content") or ""
-        if text.strip():
-            return text
+        choice = data["choices"][0]
+        text = choice["message"].get("content") or ""
+        problem = transcript_problem(text, choice.get("finish_reason")) if text.strip() else "empty"
+        if problem:
+            last = RuntimeError(f"{model}: {problem}")
+            continue
+        return text
     raise RuntimeError(f"no OpenRouter vision model returned text ({last})")
 
 
