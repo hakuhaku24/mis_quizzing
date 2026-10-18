@@ -74,10 +74,7 @@ export function KnowledgeMap({ subjects, onOpenUnit }: { subjects: SubjectMap[];
 
   return (
     <View style={styles.card}>
-      <View style={{ gap: 4 }}>
-        <Text style={styles.title}>知識地圖</Text>
-        <Text style={styles.hint}>每一格是一個單元，越大格的單元考越多。寫過的單元會亮起來。</Text>
-      </View>
+      <Text style={styles.title}>知識地圖</Text>
 
       {subjects.length > 1 && (
         <View style={styles.tabs}>
@@ -168,7 +165,6 @@ export function KnowledgeMap({ subjects, onOpenUnit }: { subjects: SubjectMap[];
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.xl, padding: spacing.xl, gap: 14 },
   title: { fontSize: 16, fontWeight: "800", color: colors.ink },
-  hint: { fontSize: 12.5, lineHeight: 20, color: colors.ink2 },
   tabs: { flexDirection: "row", gap: 4, backgroundColor: "#F4F4F5", borderRadius: 12, padding: 4 },
   tab: { flex: 1, minHeight: 40, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   tabActive: { backgroundColor: colors.surface, shadowColor: "#18181B", shadowOpacity: 0.1, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
