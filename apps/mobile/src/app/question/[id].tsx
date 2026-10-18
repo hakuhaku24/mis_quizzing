@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TextInput, Pressable, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Alert,
 } from "react-native";
-import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter, type ErrorBoundaryProps } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import RichText from "../../components/RichText";
@@ -16,7 +16,7 @@ import { REPORT_REASONS, submitReport, type ReportReason } from "../../lib/repor
 import { CONSENT_MESSAGE, CONSENT_TITLE, grantAIConsent, hasAIConsent } from "../../lib/consent";
 import { getQuestion, getAttempt, submitAttempt, setSelfAssessment, setErrorType, gradeAttempt } from "../../lib/attempts";
 import { colors, radius, spacing, typography } from "../../lib/theme";
-import type { AiGrade, Confidence, ErrorType, Question, SelfAssessment, Solution } from "../../lib/types";
+import type { AiGrade, AiGradePoint, Confidence, ErrorType, Question, SelfAssessment, Solution } from "../../lib/types";
 
 const TOPIC_LABELS: Record<string, string> = { MIS: "管理資訊系統", DS: "資料結構", CS: "計算機概論", STAT: "統計學" };
 const CONFIDENCE_META: Record<Confidence, string> = { low: "沒把握", medium: "普通", high: "很有把握" };
@@ -26,6 +26,44 @@ const SELF_ASSESS_META: Record<SelfAssessment, string> = { correct: "完全懂�
 function parseOptions(q: Question): string[] {
   if (q.question_type !== "multiple_choice" || !q.options) return [];
   return q.options;
+}
+
+/** A grade is model output and can lack a list or the summary (attempt 70,
+ *  2026-10-19, crashed this screen): show what is there instead. */
+function normalizeGrade(raw: AiGrade | null | undefined): AiGrade | null {
+  if (!raw || typeof raw !== "object") return null;
+  const strings = (v: unknown) => (Array.isArray(v) ? v.filter((s): s is string => typeof s === "string" && s.length > 0) : []);
+  const points = Array.isArray(raw.got_points)
+    ? raw.got_points.filter((p): p is AiGradePoint | string =>
+        typeof p === "string" ? p.length > 0 : typeof p === "object" && p !== null && typeof p.point === "string")
+    : [];
+  const score = Number(raw.score);
+  return {
+    score: Number.isFinite(score) ? score : 0,
+    verdict: raw.verdict === "correct" || raw.verdict === "wrong" ? raw.verdict : "partial",
+    got_points: points,
+    missing_points: strings(raw.missing_points),
+    wrong_points: strings(raw.wrong_points),
+    feedback: typeof raw.feedback === "string" ? raw.feedback : "",
+  };
+}
+
+/** If drawing this screen still fails, offer a way back instead of a blank screen. */
+export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
+  const router = useRouter();
+  return (
+    <SafeAreaView style={styles.center}>
+      <Text style={styles.crashText}>這題暫時打不開</Text>
+      <View style={styles.crashRow}>
+        <Pressable style={styles.crashButton} onPress={() => router.back()}>
+          <Text style={styles.crashButtonText}>返回</Text>
+        </Pressable>
+        <Pressable style={[styles.crashButton, styles.crashButtonPrimary]} onPress={retry}>
+          <Text style={[styles.crashButtonText, styles.crashButtonTextPrimary]}>重試</Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
 }
 
 export default function QuestionScreen() {
@@ -103,7 +141,7 @@ function QuestionView({ id, savedAttemptId, randomMode }: { id: number; savedAtt
           setConfidence(saved.confidence);
           setSelfAssessmentState(saved.self_assessment);
           setErrorTypeState(saved.error_type);
-          setAiGrade(saved.ai_feedback);
+          setAiGrade(normalizeGrade(saved.ai_feedback));
           setSavedAt(saved.created_at);
           setSubmitted(true);
         }
@@ -210,7 +248,7 @@ function QuestionView({ id, savedAttemptId, randomMode }: { id: number; savedAtt
     setGrading(true);
     setGradeError(null);
     try {
-      setAiGrade(await gradeAttempt(attemptId, question.id));
+      setAiGrade(normalizeGrade(await gradeAttempt(attemptId, question.id)));
     } catch (e) {
       setGradeError(e instanceof Error && e.message ? e.message : "批改失敗，請稍後再試");
     }
@@ -369,7 +407,7 @@ function QuestionView({ id, savedAttemptId, randomMode }: { id: number; savedAtt
                     {aiGrade.wrong_points.length > 0 && (
                       <PointList title="✗ 寫錯的地方" color={colors.danger} items={aiGrade.wrong_points} />
                     )}
-                    <Text style={styles.feedback}>{formatMath(aiGrade.feedback)}</Text>
+                    {aiGrade.feedback.length > 0 && <Text style={styles.feedback}>{formatMath(aiGrade.feedback)}</Text>}
                   </View>
                 )}
 
@@ -536,6 +574,15 @@ function optionToneStyle(tone: string) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.ground },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.ground },
+  crashText: { ...typography.h2, color: colors.ink },
+  crashRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.lg },
+  crashButton: {
+    minHeight: 44, minWidth: 96, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1,
+    borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center",
+  },
+  crashButtonPrimary: { backgroundColor: colors.accent, borderColor: colors.accent },
+  crashButtonText: { fontSize: 15, fontWeight: "600", color: colors.ink },
+  crashButtonTextPrimary: { color: "#fff" },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, height: 56 },
   iconButton: { width: 34, height: 34, borderRadius: radius.full, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   topBarTitle: { fontSize: 13, fontWeight: "800", color: colors.ink },

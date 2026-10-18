@@ -169,6 +169,14 @@ class Grader {
 const LATEX_AFTER_ESCAPE =
   /(?<!\\)\\(?=(?:frac|forall|flat|floor|beta|begin|bar|binom|bigcup|bigcap|big|bmod|boldsymbol|bot|neq|nabla|not|nu|neg|newline|nsubseteq|nexists|ni|rho|rightarrow|right|rceil|rfloor|rangle|rm|rbrace|tau|theta|times|textbf|text|tilde|triangle|tfrac|tan|top|to)(?![a-zA-Z]))/g;
 
+/** Every field the app shows is there. A regrade once came back with only
+ *  score, verdict, got_points and name_checks; it was saved and the question
+ *  screen crashed on it (attempt 70, 2026-10-19). */
+function isCompleteGrade(g: Grade): boolean {
+  return Number.isFinite(Number(g.score)) && typeof g.verdict === "string" && Array.isArray(g.got_points) &&
+    Array.isArray(g.missing_points) && Array.isArray(g.wrong_points) && typeof g.feedback === "string";
+}
+
 function parseModelJson<T>(text: string): T {
   const protectedText = text.replace(LATEX_AFTER_ESCAPE, "\\\\");
   try {
@@ -273,34 +281,52 @@ Deno.serve(async (req: Request) => {
 
     let grade: Grade | null = null;
     let droppedPoints = 0;
+    // a complete first pass, kept in case the regrade comes back incomplete
+    let firstPass: Grade | null = null;
+    let regrading = false;
     for (let attempt_n = 0; attempt_n < 2; attempt_n++) {
       let content: string;
       try {
-        content = await grader.call(messages, attempt_n === 0 ? "grade" : "regrade");
+        content = await grader.call(messages, regrading ? "regrade" : "grade");
       } catch (e) {
         console.error("all AI providers failed:", e);
         return Response.json({ error: "AI 批改暫時無法使用，請稍後再試，或先用自評記錄這題" }, { status: 503 });
       }
-      let parsed: Grade;
+      let parsed: Grade | null = null;
       try {
         parsed = parseModelJson<Grade>(content);
       } catch {
-        return Response.json({ error: "grader returned invalid JSON" }, { status: 502 });
+        parsed = null;
       }
-      const invalid = (parsed.got_points ?? []).filter((gp) => !quoteValid(gp));
+      if (!parsed || !isCompleteGrade(parsed)) {
+        // first try: ask the same thing once more; a regrade falls back to the first pass below
+        console.error(`grader output incomplete or not JSON (try ${attempt_n + 1})`);
+        continue;
+      }
+      const invalid = parsed.got_points.filter((gp) => !quoteValid(gp));
       if (invalid.length === 0 || attempt_n === 1) {
         droppedPoints = invalid.length;
-        parsed.got_points = (parsed.got_points ?? []).filter(quoteValid);
+        parsed.got_points = parsed.got_points.filter(quoteValid);
         grade = parsed;
         break;
       }
+      firstPass = parsed;
+      regrading = true;
       messages.push({ role: "assistant", content });
       messages.push({
         role: "user",
         content: `你上一次批改違反證據原則：以下 got_points 的 quote 不是考生答案的逐字原文（考生根本沒寫這些內容）：\n${JSON.stringify(invalid, null, 2)}\n重新批改。凡是考生沒有明文寫出的內容一律不得列入 got_points；若考生實際寫的內容與該得分點相反，改列入 wrong_points 並相應扣分。只輸出修正後的完整 JSON。`,
       });
     }
-    if (!grade) return Response.json({ error: "grading failed" }, { status: 502 });
+    if (!grade && firstPass) {
+      // the regrade came back incomplete: keep the first pass, minus the points whose quotes aren't in the answer
+      const invalid = firstPass.got_points.filter((gp) => !quoteValid(gp));
+      droppedPoints = invalid.length;
+      firstPass.got_points = firstPass.got_points.filter(quoteValid);
+      grade = firstPass;
+    }
+    // nothing is saved, so the attempt can be graded again and today's count is untouched
+    if (!grade) return Response.json({ error: "AI 批改這次沒有成功，請再按一次，或先用自評記錄這題" }, { status: 502 });
 
     const structured = (grade.got_points ?? []).filter(
       (gp): gp is GotPoint => typeof gp === "object" && gp !== null
