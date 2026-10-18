@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -7,15 +7,20 @@ import { LegalLinks } from "../components/LegalLinks";
 import {
   countOwnAttempts, deleteAccount, isEmailTaken, isGuest, linkAccount, logout, switchToAccount,
 } from "../lib/account";
+import { getBankSchools } from "../lib/bank";
+import { schoolName } from "../lib/labels";
+import { loadExcludedSources, saveExcludedSources } from "../lib/sources";
 import { useSession } from "../lib/useSession";
 import { colors, radius, spacing, typography } from "../lib/theme";
 
 type Form = "none" | "link" | "signin";
 
 /**
- * 帳號: a guest can create an account (keeps every record), sign in to an
+ * 我的: a guest can create an account (keeps every record), sign in to an
  * existing one, or delete what is on this phone — never "log out", which
  * would strand the guest's records. A registered user gets 登出 / 刪除帳號.
+ * Both get 首頁的題目來源: the schools (and 範本題) that 每日練習 and 隨機一題
+ * draw from; at least one stays on.
  */
 export default function AccountScreen() {
   const router = useRouter();
@@ -26,6 +31,35 @@ export default function AccountScreen() {
   const [error, setError] = useState<string | null>(null);
   const [emailTaken, setEmailTaken] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const userId = session?.user.id;
+  const [sources, setSources] = useState<string[] | null>(null);
+  const [excluded, setExcluded] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    Promise.all([getBankSchools(), loadExcludedSources(userId)])
+      .then(([schools, off]) => {
+        if (!alive) return;
+        setSources([...schools, "template"]);
+        setExcluded(off);
+      })
+      .catch(() => undefined); // without the list the section just doesn't show
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
+
+  const toggleSource = (code: string) => {
+    if (!userId || !sources) return;
+    const on = !excluded.has(code);
+    if (on && sources.filter((c) => !excluded.has(c)).length <= 1) return; // keep at least one on
+    const next = new Set(excluded);
+    if (on) next.add(code);
+    else next.delete(code);
+    setExcluded(next);
+    saveExcludedSources(userId, next).catch(() => undefined);
+  };
 
   // back to the opening screen once there is no account on this phone any more
   const leave = () => {
@@ -99,13 +133,40 @@ export default function AccountScreen() {
 
   const guest = isGuest(session);
 
+  const sourceSection = sources && (
+    <View>
+      <Text style={styles.sectionTitle}>首頁的題目來源</Text>
+      <View style={styles.list}>
+        {sources.map((code, i) => {
+          const on = !excluded.has(code);
+          const label = code === "template" ? "範本題" : schoolName(code);
+          return (
+            <Fragment key={code}>
+              {i > 0 && <View style={styles.rowDivider} />}
+              <Pressable
+                style={styles.sourceRow}
+                onPress={() => toggleSource(code)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: on }}
+                accessibilityLabel={label}
+              >
+                <Text style={[styles.rowText, !on && styles.sourceOff]}>{label}</Text>
+                {on && <Text style={styles.sourceCheck}>✓</Text>}
+              </Pressable>
+            </Fragment>
+          );
+        })}
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <View style={styles.topBar}>
         <Pressable style={styles.iconButton} onPress={() => router.back()} accessibilityLabel="返回">
           <Ionicons name="chevron-back" size={18} color={colors.ink2} />
         </Pressable>
-        <Text style={styles.topBarTitle}>帳號</Text>
+        <Text style={styles.topBarTitle}>我的</Text>
         <View style={{ width: 34 }} />
       </View>
 
@@ -163,6 +224,8 @@ export default function AccountScreen() {
                 )}
               </View>
 
+              {sourceSection}
+
               <Pressable
                 style={styles.dangerRow}
                 onPress={() => confirmDelete("刪除這支手機上的紀錄", "所有作答紀錄會永久刪除，無法復原。確定要刪除嗎？")}
@@ -176,6 +239,8 @@ export default function AccountScreen() {
                 <Text style={styles.label}>目前登入</Text>
                 <Text style={styles.email}>{session.user.email}</Text>
               </View>
+
+              {sourceSection}
 
               <View style={styles.list}>
                 <Pressable style={styles.row} onPress={() => logout().then(leave).catch((e: Error) => Alert.alert("登出失敗", e.message))}>
@@ -224,6 +289,10 @@ const styles = StyleSheet.create({
   row: { minHeight: 52, paddingHorizontal: spacing.xl, justifyContent: "center" },
   rowDivider: { height: 1, backgroundColor: colors.line, marginLeft: spacing.xl },
   rowText: { fontSize: 15, color: colors.ink },
+  sectionTitle: { fontSize: 12.5, fontWeight: "600", color: colors.ink2, paddingHorizontal: spacing.xs, marginBottom: spacing.sm },
+  sourceRow: { minHeight: 44, paddingHorizontal: spacing.xl, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sourceOff: { color: "#71717A" },
+  sourceCheck: { fontSize: 16, fontWeight: "700", color: colors.accent },
   dangerRow: { minHeight: 44, alignItems: "center", justifyContent: "center" },
   dangerText: { fontSize: 14, color: colors.danger, fontWeight: "600" },
 });
