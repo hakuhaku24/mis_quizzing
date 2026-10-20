@@ -100,7 +100,7 @@ export default function HomeScreen() {
           <Text style={styles.brandText}>考研教練</Text>
         </View>
         {/* 登出 / 刪除帳號 live on the account page, where a guest gets 建立帳號 instead of 登出 */}
-        <Pressable style={styles.iconButton} onPress={() => router.push("/account")} accessibilityLabel="帳號">
+        <Pressable style={styles.iconButton} onPress={() => router.push("/account")} accessibilityLabel="我的">
           <Ionicons name="person-outline" size={17} color={colors.ink2} />
         </Pressable>
       </View>
