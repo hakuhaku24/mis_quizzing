@@ -235,7 +235,7 @@ mis-grad-exam-coach/
 | T9 | RevenueCat 串 Google Play 時，要在同一個 Google Cloud 專案建立 service account | 做付費功能時 | 之後 |
 | T13 | 自訂寄信服務（SMTP）：Supabase 內建寄信每小時 2 封、且只寄給專案團隊成員，**測試者／使用者的「忘記密碼」信寄不出去**（註冊不受影響：`mailer_autoconfirm` 已開，不需驗證信）。接 Resend 免費方案或 Gmail 應用程式密碼，在 Supabase → Authentication → SMTP 設定；`site_url` 目前還是 `http://localhost:3000`，順便確認重設密碼的導回網址 | 正式上架前 | 待辦（封測期間忘記密碼的人由開發者在 Supabase 後台協助重設） |
 | T14 | 調高「匿名登入」的頻率上限：Supabase 預設同一個 IP 每小時 30 次，台灣行動網路很多人共用同一個對外 IP，上架當天 Threads 湧入時可能有人按「直接開始刷題」失敗。Supabase → Authentication → Rate Limits 調高匿名使用者那一項 | 正式上架前 | 待辦 |
-| T15 | Play Console 更新：資料安全性表單「電子郵件地址」改成**選用**（使用者 ID 仍是必要）；「應用程式存取權」補一句「可直接按『直接開始刷題』使用，不需登入」；Google 文件版的隱私權政策與刪除帳號說明重新貼上（文字檔已更新，最新一版是 2026-10-20 拿掉 Groq 的） | 免註冊推送後 | 待辦 |
+| T15 | Play Console 更新：資料安全性表單「電子郵件地址」改成**選用**（使用者 ID 仍是必要）；「應用程式存取權」補一句「可直接按『直接開始刷題』使用，不需登入」；Google 文件版的隱私權政策與刪除帳號說明重新貼上（文字檔已更新，最新一版是 2026-10-20 拿掉 Groq 的） | 免註冊推送後 | 隱私權政策的 Google 文件版 ✅ 2026-10-20 開發者已重貼；Play Console 兩項待辦 |
 | T16 | **重新產生 Supabase 部署金鑰**：`.env` 的 `SUPABASE_ACCESS_TOKEN` 已失效（2026-10-19 部署 `grade-attempt` 時 Supabase 回 401）。Supabase 網站右上角頭像 → Account preferences → Access Tokens → Generate new token，貼回 `.env` 的 `SUPABASE_ACCESS_TOKEN`，告訴 Claude 部署（見 6.2.15）。之後 `supabase secrets set` 也要用它 | 盡快 | ✅ 2026-10-19 開發者已更新，部署完成 |
 | T12 | 把 App 的 repo（hakuhaku24/mis_quizzing）改成私有：目前公開，題庫資料庫與內部規劃都看得到（金鑰沒有外流，已檢查 git 歷史） | 有空時 | 等待中 |
 | T10 | 詳解裡誤寫成文字的「`\n`」（字面反斜線 n，App 會直接顯示） | — | ✅ 2026-10-15 修正 10 份（程式碼與 LaTeX 裡的 `\n` 不能動，未動），`pipeline/jobs/fix_literal_newlines.py` |
