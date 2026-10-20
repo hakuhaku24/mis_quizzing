@@ -35,6 +35,24 @@ ESSAY_SYSTEM = """你是台灣資管所研究所入學考試的解題老師。�
  "explanation": "1-3 句補充：常見錯誤或延伸考點，無則空字串"}
 數學式用 $...$ LaTeX，程式碼用 markdown 程式碼區塊。"""
 
+# The format description sits inside the JSON example's value, and some models copy
+# it into the answer: 24 published solutions began "完整參考答案：依題目要求逐點作答……"
+# (2026-10-20). strip_echoed_format drops the copied sentences and keeps the answer.
+_FORMAT_SENTENCES = [s + "。" for s in re.search(r'"solution_text": "完整參考答案：([^"]*)"', ESSAY_SYSTEM).group(1).split("。") if s]
+
+
+def strip_echoed_format(sol: str) -> str:
+    head = "完整參考答案："
+    if not sol.startswith(head):
+        return sol
+    rest = sol[len(head):]
+    for sentence in _FORMAT_SENTENCES:
+        if not rest.startswith(sentence):
+            break
+        rest = rest[len(sentence):]
+    return head + rest
+
+
 MC_SYSTEM = """你是台灣資管所研究所入學考試的解題老師。判斷選擇題的正確答案，繁體中文，只輸出 JSON（無 markdown 圍欄）：
 {"multi_select": true|false,
  "correct_options": ["A", ...],
@@ -259,7 +277,7 @@ def main() -> None:
                 )
             else:
                 out = llm(key, ESSAY_SYSTEM, head)
-                sol = out.get("solution_text", "").strip()
+                sol = strip_echoed_format(out.get("solution_text", "").strip())
                 if len(sol) < 30:
                     print(f"  q{qid}: solution too short, skipped", flush=True)
                     continue

@@ -36,7 +36,7 @@ from pathlib import Path
 
 import fitz  # pymupdf
 
-from pipeline.jobs.generate_draft_solutions import ESSAY_SYSTEM, MC_SYSTEM, parse_mc_answer, repair_json
+from pipeline.jobs.generate_draft_solutions import ESSAY_SYSTEM, MC_SYSTEM, parse_mc_answer, repair_json, strip_echoed_format
 from pipeline.jobs.fix_multi_select import groq, read_env
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -600,7 +600,7 @@ def stage_solve(key: str, groq_key: str, paper: tuple) -> None:
             }
         else:
             out, model = free_chain(key, TEXT_MODELS, lambda m: gemini_json(key, m, head, ESSAY_SYSTEM, 12000))
-            sol = (out.get("solution_text") or "").strip()
+            sol = strip_echoed_format((out.get("solution_text") or "").strip())
             if len(sol) < 30:
                 print(f"    {pid} q{num}: solution too short, will retry next run", flush=True)
                 continue
