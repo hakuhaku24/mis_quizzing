@@ -48,6 +48,14 @@ function normalizeGrade(raw: AiGrade | null | undefined): AiGrade | null {
   };
 }
 
+/** The AI score's band: the same lines as the score badges in the history list
+ *  (lib/labels.ts) and the review schedule (lib/srs.ts) — 7+ is done, 4–6 comes
+ *  back in 3 days, 0–3 tomorrow. The model's own correct/partial/wrong label
+ *  was inconsistent (the same 2/10 called either) and is no longer shown. */
+const scoreBand = (score: number) => (score >= 7 ? "done" : score >= 4 ? "partial" : "low");
+// a shade darker than the theme colors so the score keeps 4.5:1 contrast on the AI card
+const BAND_COLOR = { done: "#15803D", partial: "#B45309", low: "#B91C1C" };
+
 /** If drawing this screen still fails, offer a way back instead of a blank screen. */
 export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
   const router = useRouter();
@@ -260,7 +268,7 @@ function QuestionView({ id, savedAttemptId, randomMode }: { id: number; savedAtt
     (isMC
       ? isCorrect === false
       : selfAssessment === "wrong" || selfAssessment === "partial" ||
-        aiGrade?.verdict === "wrong" || aiGrade?.verdict === "partial");
+        (aiGrade !== null && scoreBand(aiGrade.score) !== "done"));
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
@@ -393,10 +401,9 @@ function QuestionView({ id, savedAttemptId, randomMode }: { id: number; savedAtt
                 {aiGrade && (
                   <View style={styles.aiCard}>
                     <View style={styles.aiHeaderRow}>
-                      <Text style={styles.aiScore}>{aiGrade.score}<Text style={styles.aiScoreMax}> / 10</Text></Text>
-                      <View style={styles.verdictChip}>
-                        <Text style={styles.verdictText}>{aiGrade.verdict === "correct" ? "答對" : aiGrade.verdict === "partial" ? "部分正確" : "答錯"}</Text>
-                      </View>
+                      <Text style={[styles.aiScore, { color: BAND_COLOR[scoreBand(aiGrade.score)] }]}>
+                        {aiGrade.score}<Text style={styles.aiScoreMax}> / 10</Text>
+                      </Text>
                     </View>
                     {aiGrade.got_points.length > 0 && (
                       <PointList title="✓ 有答到" color={colors.success} items={aiGrade.got_points.map((p) => (typeof p === "string" ? p : p.point))} />
@@ -634,9 +641,8 @@ const styles = StyleSheet.create({
   modalSend: { backgroundColor: colors.accent, borderRadius: radius.md, paddingHorizontal: spacing.xl, paddingVertical: 10 },
   aiCard: { backgroundColor: colors.aiSoft, borderWidth: 1, borderColor: colors.aiLine, borderRadius: radius.md, padding: spacing.md, gap: spacing.md },
   aiHeaderRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  aiScore: { fontSize: 22, fontWeight: "800", color: colors.aiAccent },
-  aiScoreMax: { fontSize: 13, fontWeight: "400", color: "#A78BFA" },
-  verdictChip: { backgroundColor: "#fff", paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.full },
-  verdictText: { fontSize: 11, fontWeight: "700", color: colors.aiAccent },
+  aiScore: { fontSize: 22, fontWeight: "800" },
+  // takes the score's color
+  aiScoreMax: { fontSize: 13, fontWeight: "400" },
   feedback: { fontSize: 12.5, color: colors.ink2, borderTopWidth: 1, borderTopColor: colors.aiLine, paddingTop: spacing.sm },
 });
