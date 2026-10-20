@@ -19,8 +19,13 @@ type Quota = { review: number; weak: number; unseen: number };
 const SLOTS: Quota = { review: 2, weak: 6, unseen: 2 };
 const SLOT_ORDER: Slot[] = ["review", "weak", "unseen", "extra"];
 const DAY_MS = 86_400_000;
+// Planning only needs each question's concepts and source; the full text is
+// downloaded just for the ~10 questions on the list (all 1,700 texts were
+// ~720 KB on every open of the home screen, 2026-10-20).
+const PLAN_COLUMNS = "id, concepts, school";
 const QUESTION_COLUMNS = "id, question_text, question_type, topic, subtopic, concepts, difficulty, correct_option, school, exam_year";
 
+type PlanQuestion = Pick<Question, "id" | "concepts" | "school">;
 type PlanItem = { id: number; slot: Slot };
 type StateRow = { question_id: number; next_review_at: string | null };
 
@@ -64,14 +69,9 @@ export async function getDailyTasks(): Promise<DailyItem[]> {
     today_attempt_id: attemptedToday.get(q.id) ?? null,
   });
 
-  const questions = await fetchAll<Question>((from, to) =>
-    supabase.from("questions").select(QUESTION_COLUMNS).in("topic", DAILY_TOPICS).order("id").range(from, to).returns<Question[]>()
-  );
-  const byId = new Map(questions.map((q) => [q.id, q]));
-
   const excluded = await loadExcludedSources(userId);
   const off = [...excluded].sort().join(",");
-  const allowed = (q: Question) => sourceAllowed(excluded, q.school);
+  const allowed = (q: PlanQuestion) => sourceAllowed(excluded, q.school);
 
   let cached: CachedDaily | null = null;
   try {
@@ -81,29 +81,45 @@ export async function getDailyTasks(): Promise<DailyItem[]> {
     cached = null;
   }
 
-  let plan = cached?.date === today ? cached.items : null;
-  if (plan && (cached?.off ?? "") !== off) {
-    // the sources changed today: swap out what is now turned off and not done
-    // yet, into the same slots where possible; done questions keep their ✓
-    const kept = plan.filter(({ id }) => {
-      const q = byId.get(id);
-      return attemptedToday.has(id) || (q !== undefined && allowed(q));
-    });
-    const dropped = plan.filter((item) => !kept.includes(item));
-    if (dropped.length > 0) {
-      const quota: Quota = { review: 0, weak: 0, unseen: 0 };
-      for (const { slot } of dropped) quota[slot === "extra" ? "unseen" : slot] += 1;
-      const fill = planDay(questions, attempts, latest, await fetchStates(userId), allowed, quota, new Set(kept.map(({ id }) => id)));
-      const merged = [...kept, ...fill];
-      plan = SLOT_ORDER.flatMap((slot) => merged.filter((item) => item.slot === slot));
+  const todays = cached?.date === today ? cached.items : null;
+  let plan: PlanItem[];
+  if (todays && (cached?.off ?? "") === off) {
+    // most opens: today's list is already made, so nothing needs the whole bank
+    plan = todays;
+  } else {
+    const questions = await fetchAll<PlanQuestion>((from, to) =>
+      supabase.from("questions").select(PLAN_COLUMNS).in("topic", DAILY_TOPICS).order("id").range(from, to).returns<PlanQuestion[]>()
+    );
+    if (todays) {
+      // the sources changed today: swap out what is now turned off and not done
+      // yet, into the same slots where possible; done questions keep their ✓
+      const byId = new Map(questions.map((q) => [q.id, q]));
+      const kept = todays.filter(({ id }) => {
+        const q = byId.get(id);
+        return attemptedToday.has(id) || (q !== undefined && allowed(q));
+      });
+      const dropped = todays.filter((item) => !kept.includes(item));
+      plan = todays;
+      if (dropped.length > 0) {
+        const quota: Quota = { review: 0, weak: 0, unseen: 0 };
+        for (const { slot } of dropped) quota[slot === "extra" ? "unseen" : slot] += 1;
+        const fill = planDay(questions, attempts, latest, await fetchStates(userId), allowed, quota, new Set(kept.map(({ id }) => id)));
+        const merged = [...kept, ...fill];
+        plan = SLOT_ORDER.flatMap((slot) => merged.filter((item) => item.slot === slot));
+      }
+    } else {
+      plan = planDay(questions, attempts, latest, await fetchStates(userId), allowed, SLOTS);
     }
     await saveCache(userId, { date: today, items: plan, off });
   }
-  if (!plan) {
-    plan = planDay(questions, attempts, latest, await fetchStates(userId), allowed, SLOTS);
-    await saveCache(userId, { date: today, items: plan, off });
-  }
 
+  if (plan.length === 0) return [];
+  const { data } = await supabase
+    .from("questions")
+    .select(QUESTION_COLUMNS)
+    .in("id", plan.map(({ id }) => id))
+    .returns<Question[]>();
+  const byId = new Map((data ?? []).map((q) => [q.id, q]));
   return plan.flatMap(({ id, slot }) => {
     const q = byId.get(id);
     return q ? [toItem(q, slot)] : [];
@@ -133,11 +149,11 @@ async function saveCache(userId: string, cache: CachedDaily): Promise<void> {
 /** Picks `quota` questions (review → weak → unseen, shortfalls filled from
  *  what is left) among those `allowed`, never one already in `reserved`. */
 function planDay(
-  questions: Question[],
+  questions: PlanQuestion[],
   attempts: ScorableAttempt[],
   latest: Map<number, number>,
   states: StateRow[],
-  allowed: (q: Question) => boolean,
+  allowed: (q: PlanQuestion) => boolean,
   quota: Quota,
   reserved: Set<number> = new Set()
 ): PlanItem[] {
@@ -152,8 +168,8 @@ function planDay(
   // only these may be handed out; weak concepts below still look at every answer
   const pool = questions.filter(allowed);
 
-  const take = (candidates: Question[], n: number): Question[] => {
-    const out: Question[] = [];
+  const take = (candidates: PlanQuestion[], n: number): PlanQuestion[] => {
+    const out: PlanQuestion[] = [];
     for (const q of candidates) {
       if (out.length >= n) break;
       if (!used.has(q.id)) {
@@ -163,7 +179,7 @@ function planDay(
     }
     return out;
   };
-  const shuffled = (qs: Question[]) => [...qs].sort((a, b) => shuffleKey(a.id) - shuffleKey(b.id));
+  const shuffled = (qs: PlanQuestion[]) => [...qs].sort((a, b) => shuffleKey(a.id) - shuffleKey(b.id));
 
   // 1) review: due and not yet answered right, most overdue first
   const due = pool
