@@ -268,11 +268,21 @@ MAX_PAGE_CHARS = 12000
 SELF_TALK = re.compile(r"^\W*(?:The user (?:wants|is asking|has provided)|I need to|Let me |Okay|Alright|We need to)", re.I)
 
 
+def mostly_blank(text: str) -> bool:
+    """A long transcript that is mostly whitespace is a failed page, not a blank
+    one: Gemini once returned NTU 105 資訊管理導論 (one page) as the header plus
+    1,950 full-width spaces, and the paper silently lost every question
+    (2026-10-20). Real pages are at least 60% non-space."""
+    return len(text) >= 500 and sum(not c.isspace() for c in text) < 0.2 * len(text)
+
+
 def transcript_problem(text: str, finish_reason: str | None) -> str | None:
     if finish_reason not in (None, "stop"):
         return f"finish_reason {finish_reason}"
     if len(text) > MAX_PAGE_CHARS:
         return f"{len(text)} chars, too long for one page"
+    if mostly_blank(text):
+        return "mostly whitespace"
     if SELF_TALK.match(text):
         return "wrote its reasoning instead of the transcript"
     if "<unk>" in text:
@@ -354,17 +364,23 @@ def stage_ocr(key: str, or_key: str, paper: tuple) -> None:
         img = page.get_pixmap(matrix=fitz.Matrix(scale, scale)).tobytes("jpeg")
         parts = [{"text": OCR_PROMPT},
                  {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(img).decode()}}]
+
+        def gemini_page(m: str, temperature: float) -> str:
+            text = gemini(key, m, parts, max_tokens=6000, temperature=temperature, low_thinking=True)
+            if mostly_blank(text):
+                raise RuntimeError("no output: mostly whitespace")
+            return text
+
         try:
-            text, model = free_chain(key, VISION_MODELS, lambda m: gemini(key, m, parts, max_tokens=6000, temperature=0.2,
-                                                                          low_thinking=True))
+            text, model = free_chain(key, VISION_MODELS, lambda m: gemini_page(m, 0.2))
         except FreeExhausted as e:
-            if "RECITATION" not in str(e):
+            if "RECITATION" not in str(e) and "mostly whitespace" not in str(e):
                 raise
-            # Gemini refuses verbatim text it has seen online; warmer sampling
-            # usually gets through, otherwise fall back to an open model.
+            # Gemini refuses verbatim text it has seen online (or pads the page
+            # with whitespace); warmer sampling usually gets through, otherwise
+            # fall back to an open model.
             try:
-                text, model = free_chain(key, VISION_MODELS[:2], lambda m: gemini(key, m, parts, max_tokens=6000,
-                                                                                  temperature=0.9, low_thinking=True))
+                text, model = free_chain(key, VISION_MODELS[:2], lambda m: gemini_page(m, 0.9))
             except FreeExhausted:
                 try:
                     text, model = openrouter_vision(or_key, OCR_PROMPT, img), OPENROUTER_VISION_MODEL
