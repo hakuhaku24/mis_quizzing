@@ -53,8 +53,8 @@ function normalizeGrade(raw: AiGrade | null | undefined): AiGrade | null {
  *  back in 3 days, 0–3 tomorrow. The model's own correct/partial/wrong label
  *  was inconsistent (the same 2/10 called either) and is no longer shown. */
 const scoreBand = (score: number) => (score >= 7 ? "done" : score >= 4 ? "partial" : "low");
-// a shade darker than the theme colors so the score keeps 4.5:1 contrast on the AI card
-const BAND_COLOR = { done: "#15803D", partial: "#B45309", low: "#B91C1C" };
+// the darker text shades keep 4.5:1 contrast on the AI card
+const BAND_COLOR = { done: colors.successText, partial: colors.warningText, low: colors.dangerText };
 
 /** If drawing this screen still fails, offer a way back instead of a blank screen. */
 export function ErrorBoundary({ retry }: ErrorBoundaryProps) {

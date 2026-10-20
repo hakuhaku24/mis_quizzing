@@ -24,6 +24,11 @@ export const colors = {
   aiAccent: "#7C3AED",
   aiSoft: "#F5F3FF",
   aiLine: "#DDD6FE",
+  // a shade darker, for text on the soft fills (and the AI card): keeps 4.5:1
+  // contrast where success/warning/danger reach only about 3:1
+  successText: "#15803D",
+  warningText: "#B45309",
+  dangerText: "#B91C1C",
 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };

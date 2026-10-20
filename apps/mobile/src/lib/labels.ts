@@ -63,17 +63,17 @@ export interface Badge {
 
 /** Score / mark badge shared by the history list and question bank. */
 export function attemptBadge(a: AttemptOutcome): Badge {
-  if (a.is_correct === true) return { bg: colors.successSoft, color: colors.success, text: "✓" };
-  if (a.is_correct === false) return { bg: colors.dangerSoft, color: colors.danger, text: "✕" };
+  if (a.is_correct === true) return { bg: colors.successSoft, color: colors.successText, text: "✓" };
+  if (a.is_correct === false) return { bg: colors.dangerSoft, color: colors.dangerText, text: "✕" };
   if (a.ai_score != null) {
     const v = a.ai_score;
     const text = `${v}/10`;
-    if (v >= 7) return { bg: colors.successSoft, color: colors.success, text };
-    if (v >= 4) return { bg: colors.warningSoft, color: colors.warning, text };
-    return { bg: colors.dangerSoft, color: colors.danger, text };
+    if (v >= 7) return { bg: colors.successSoft, color: colors.successText, text };
+    if (v >= 4) return { bg: colors.warningSoft, color: colors.warningText, text };
+    return { bg: colors.dangerSoft, color: colors.dangerText, text };
   }
-  if (a.self_assessment === "correct") return { bg: colors.successSoft, color: colors.success, text: "✓" };
-  if (a.self_assessment === "partial") return { bg: colors.warningSoft, color: colors.warning, text: "△" };
-  if (a.self_assessment === "wrong") return { bg: colors.dangerSoft, color: colors.danger, text: "✕" };
+  if (a.self_assessment === "correct") return { bg: colors.successSoft, color: colors.successText, text: "✓" };
+  if (a.self_assessment === "partial") return { bg: colors.warningSoft, color: colors.warningText, text: "△" };
+  if (a.self_assessment === "wrong") return { bg: colors.dangerSoft, color: colors.dangerText, text: "✕" };
   return { bg: "#F4F4F5", color: colors.ink3, text: "—" };
 }
