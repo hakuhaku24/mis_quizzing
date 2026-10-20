@@ -3,12 +3,12 @@ import { supabase } from "./supabase";
 
 /**
  * Consent to send answers to third-party AI for grading (Apple 5.1.2(i)).
- * Bump CONSENT_VERSION whenever the list of AI providers changes (e.g. when
- * the paid Gemini fallback is enabled) so everyone is asked again.
+ * Bump CONSENT_VERSION whenever an AI provider is added so everyone is asked
+ * again; dropping one only narrows what was agreed to.
  */
 const CONSENT_VERSION = 2;
-// Same two providers as before (Gemini first since 2026-10-19), so no new consent is needed.
-export const AI_PROVIDERS = "Google Gemini 付費服務；Gemini 暫時無法使用時可能改用 Groq";
+// Gemini only since Groq was dropped on 2026-10-20 (a narrower list, so no new consent).
+export const AI_PROVIDERS = "Google Gemini 付費服務";
 
 export const CONSENT_TITLE = "AI 批改說明";
 export const CONSENT_MESSAGE =

@@ -82,7 +82,7 @@ mis-grad-exam-coach/
 | 登入 | Email＋密碼（signUp、signInWithPassword），沒有第三方登入 |
 | 使用者資料表 | `user_attempts`、`user_question_states`，以 `user_id` 加上 RLS（`auth.uid() = user_id`） |
 | ⚠️ 外鍵 | 這兩張表的 `user_id` **沒有**外鍵連到 `auth.users`，刪除 auth 使用者時資料不會自動刪除 |
-| AI 批改 | Edge Function `grade-attempt` 先呼叫 Groq（`api.groq.com`），模型由 `GROQ_MODEL` 環境變數決定，預設 `openai/gpt-oss-120b`；Groq 失敗時改用 Gemini 付費 `gemini-3.1-flash-lite`（見 C1、6.2.4） |
+| AI 批改 | Edge Function `grade-attempt`。**2026-10-19 起只用付費 Gemini** `gemini-3.1-flash-lite`（secret `GRADER_PRIMARY=gemini`，不會呼叫 Groq）。程式仍保留原本的「先 Groq（`GROQ_MODEL`，預設 `openai/gpt-oss-120b`）、失敗改 Gemini」，但隱私權政策 2026-10-20 已拿掉 Groq，要切回去得先改政策（見 6.2.15、C1、6.2.4） |
 | 金鑰 | Groq 金鑰只放在 Edge Function，app 端沒有任何第三方 AI 金鑰（這個設計要維持） |
 
 ### 4.4 作答流程（已完成）
@@ -139,7 +139,7 @@ mis-grad-exam-coach/
 
 | # | 項目 | 誰 | 狀態 |
 |---|---|---|---|
-| C1 | 批改付費後援 | Claude | ✅ 2026-10-15：Groq 失敗（含每分鐘 8,000 tokens 上限）自動改用 Gemini 付費 `gemini-3.1-flash-lite`；付費用量記在 `ai_usage_log`（不含使用者身分）；實測一次完整批改約 US$0.0015；緊急時可 `supabase secrets set GRADER_PRIMARY=gemini` 改成先用付費。**2026-10-19 起已改成付費 Gemini 優先**（開發者同意，見 6.2.15） |
+| C1 | 批改付費後援 | Claude | ✅ 2026-10-15：Groq 失敗（含每分鐘 8,000 tokens 上限）自動改用 Gemini 付費 `gemini-3.1-flash-lite`；付費用量記在 `ai_usage_log`（不含使用者身分）；實測一次完整批改約 US$0.0015；緊急時可 `supabase secrets set GRADER_PRIMARY=gemini` 改成先用付費。**2026-10-19 起只用付費 Gemini**（開發者同意；2026-10-20 決定不加 Groq 備援，見 6.2.15） |
 | C2 | 隱私權政策網頁（0-4）、刪除帳號說明網頁（0-3）的公開網址：Play Console「應用程式內容」與資料安全性表單必填 | 開發者決定放哪（T8），Claude 寫內容 | ✅ 2026-10-15（網址見 0-3、0-4） |
 | C3a | **App 內也要能開隱私權政策**（Google 使用者資料政策；2026-10-15 首次送審被退「隱私權政策找不到網頁」，網址本身正常，但通知列出「可從應用程式內存取」這條我們沒做到）：登入頁底部與首頁最底部加「隱私權政策 · 刪除帳號說明」（`components/LegalLinks.tsx`、網址集中在 `lib/links.ts`；帳號選單是系統對話框，Android 最多 3 個按鈕放不下）。要包進安裝檔（審查人員只開一次 App，OTA 第二次開才生效）→ versionCode 4 | Claude | ✅ 程式完成，重新打包中 |
 | C3 | Play Console 應用程式內容：資料安全性、內容分級問卷、目標對象（非兒童）、廣告（無）、**應用程式存取權**（需登入 → 提供一組審查用測試帳號） | 開發者（Claude 可提供填寫內容） | 進行中：應用程式存取權 ✅（審查帳號在 `.env` 的 `PLAY_REVIEW_EMAIL`／`PLAY_REVIEW_PASSWORD`，已實測可登入）；資料安全性已依下方答案填寫；剩內容分級、目標對象、廣告 |
@@ -149,7 +149,7 @@ mis-grad-exam-coach/
 | C7 | 開發者自己的手機要先**解除安裝現在的 APK**，再從 Play 測試連結安裝（簽章不同，不能直接覆蓋；伺服器上的作答資料不受影響） | 開發者 | 封測開始時 |
 | C8 | 測試者：用 Google 帳號 email 加入，至少 12 人連續 14 天（新的個人開發者帳號才需要，見 T6），招 15～20 人當緩衝；第一次送審可能要等幾天，14 天從測試者加入已上架的版本才開始算。測試者不必是資管考生（開發者身邊的企管所、物理治療所、機械所考生也可以，順便問 6.2.8 的問題） | 開發者 | 招募中 |
 
-**資料安全性表單答案（2026-10-15，與 `privacy.html` 一致）：** 收集或分享必要資料：是；傳輸加密：是；帳戶建立方式：使用者名稱和密碼；刪除帳號網址：見 0-3；只刪部分資料：否。資料類型（全部只勾「收集」、不勾「分享」——Supabase／Groq／Gemini／Expo 屬服務供應商豁免；暫時處理：否；必要）：電子郵件地址、使用者 ID（用途：應用程式功能、帳戶管理）；其他使用者產生的內容、其他動作（應用程式功能、個人化）；裝置或其他 ID（Expo 更新服務的隨機安裝 ID；應用程式功能）。**之後新增 OAuth、拍照作答、分析工具或新的第三方時，表單和 `privacy.html` 都要一起改。** 2026-10-17 免註冊上線後：電子郵件地址改成「選用」（T15）。
+**資料安全性表單答案（2026-10-15，與 `privacy.html` 一致）：** 收集或分享必要資料：是；傳輸加密：是；帳戶建立方式：使用者名稱和密碼；刪除帳號網址：見 0-3；只刪部分資料：否。資料類型（全部只勾「收集」、不勾「分享」——Supabase／Gemini／Expo 屬服務供應商豁免（2026-10-20 起不再用 Groq）；暫時處理：否；必要）：電子郵件地址、使用者 ID（用途：應用程式功能、帳戶管理）；其他使用者產生的內容、其他動作（應用程式功能、個人化）；裝置或其他 ID（Expo 更新服務的隨機安裝 ID；應用程式功能）。**之後新增 OAuth、拍照作答、分析工具或新的第三方時，表單和 `privacy.html` 都要一起改。** 2026-10-17 免註冊上線後：電子郵件地址改成「選用」（T15）。
 
 ### 6.2.1 使用體驗修正（2026-10-14 起）
 
@@ -213,7 +213,7 @@ mis-grad-exam-coach/
 | 用途 | 順序 | 備註 |
 |---|---|---|
 | 處理題目的腳本（OCR、切題、詳解、產題，在開發者電腦上跑） | Gemini 免費金鑰 → OpenRouter 免費模型 → **停下來**，印出估計費用；要用 Gemini 付費必須加 `--allow-paid`，且 Claude 每次加之前都要先問開發者 | 資料只有考題，可以用免費服務 |
-| AI 批改（線上 Edge Function） | Groq 免費 → Gemini **付費**（`gemini-3.1-flash-lite`；`gemini-2.5-flash-lite` 已不開放給新使用者） | **學生作答不可送 Gemini 免費版**：Google 條款明寫免費服務會用來改進產品、可能有人工審查，且要求不要送個人資訊 |
+| AI 批改（線上 Edge Function） | Gemini **付費**（`gemini-3.1-flash-lite`；`gemini-2.5-flash-lite` 已不開放給新使用者）；2026-10-19 以前是 Groq 免費優先，現在不用 Groq（見 6.2.15） | **學生作答不可送 Gemini 免費版**：Google 條款明寫免費服務會用來改進產品、可能有人工審查，且要求不要送個人資訊 |
 
 - 用到付費就記錄（`ai_usage_log`），並透過 Google 預算提醒（50%／90%，email）告知開發者；即時通知（Discord）見 T3。
 - 金鑰：舊的 Gemini 免費金鑰（專案 494657705930，未綁帳單，所以不會被扣款）保留；新的付費金鑰放在 `.env` 的 `GEMINI_PAID_API_KEY`；OpenRouter 在 `.env` 的 `OPENROUTER_API_KEY`（免費模式，每天 50 次免費模型）。
@@ -235,7 +235,7 @@ mis-grad-exam-coach/
 | T9 | RevenueCat 串 Google Play 時，要在同一個 Google Cloud 專案建立 service account | 做付費功能時 | 之後 |
 | T13 | 自訂寄信服務（SMTP）：Supabase 內建寄信每小時 2 封、且只寄給專案團隊成員，**測試者／使用者的「忘記密碼」信寄不出去**（註冊不受影響：`mailer_autoconfirm` 已開，不需驗證信）。接 Resend 免費方案或 Gmail 應用程式密碼，在 Supabase → Authentication → SMTP 設定；`site_url` 目前還是 `http://localhost:3000`，順便確認重設密碼的導回網址 | 正式上架前 | 待辦（封測期間忘記密碼的人由開發者在 Supabase 後台協助重設） |
 | T14 | 調高「匿名登入」的頻率上限：Supabase 預設同一個 IP 每小時 30 次，台灣行動網路很多人共用同一個對外 IP，上架當天 Threads 湧入時可能有人按「直接開始刷題」失敗。Supabase → Authentication → Rate Limits 調高匿名使用者那一項 | 正式上架前 | 待辦 |
-| T15 | Play Console 更新：資料安全性表單「電子郵件地址」改成**選用**（使用者 ID 仍是必要）；「應用程式存取權」補一句「可直接按『直接開始刷題』使用，不需登入」；Google 文件版的隱私權政策與刪除帳號說明重新貼上（文字檔已更新） | 免註冊推送後 | 待辦 |
+| T15 | Play Console 更新：資料安全性表單「電子郵件地址」改成**選用**（使用者 ID 仍是必要）；「應用程式存取權」補一句「可直接按『直接開始刷題』使用，不需登入」；Google 文件版的隱私權政策與刪除帳號說明重新貼上（文字檔已更新，最新一版是 2026-10-20 拿掉 Groq 的） | 免註冊推送後 | 待辦 |
 | T16 | **重新產生 Supabase 部署金鑰**：`.env` 的 `SUPABASE_ACCESS_TOKEN` 已失效（2026-10-19 部署 `grade-attempt` 時 Supabase 回 401）。Supabase 網站右上角頭像 → Account preferences → Access Tokens → Generate new token，貼回 `.env` 的 `SUPABASE_ACCESS_TOKEN`，告訴 Claude 部署（見 6.2.15）。之後 `supabase secrets set` 也要用它 | 盡快 | ✅ 2026-10-19 開發者已更新，部署完成 |
 | T12 | 把 App 的 repo（hakuhaku24/mis_quizzing）改成私有：目前公開，題庫資料庫與內部規劃都看得到（金鑰沒有外流，已檢查 git 歷史） | 有空時 | 等待中 |
 | T10 | 詳解裡誤寫成文字的「`\n`」（字面反斜線 n，App 會直接顯示） | — | ✅ 2026-10-15 修正 10 份（程式碼與 LaTeX 裡的 `\n` 不能動，未動），`pipeline/jobs/fix_literal_newlines.py` |
@@ -441,6 +441,9 @@ Claude 的看法（待開發者回應）：
   - **比較結果（2026-10-19）**：開發者自己的 19 筆非選擇題作答，用線上 `grade-attempt` 的原始碼在本機各批一次（假的資料庫連線，不存檔），只完成 8 筆，因為 **Groq 的每日免費額度（每天 20 萬 tokens）用完了**：背景的題庫匯入在檢查詳解時也用同一個 Groq 帳號。8 筆分數：一樣 3 筆、差 1 分 3 筆、差 2 分 2 筆（Pascal 那題 Gemini 5／Groq 3、雲端服務那題 Gemini 3／Groq 1，這兩題都是 Gemini 比較合理）。Groq 比較好的：Huffman（Gemini 把「缺論證」放進寫錯、還重複列一條）、不平衡資料（Groq 多認了兩個有寫到的點）。Groq 的問題：一次回傳不完整（被新的檢查擋下重批）、把「Mach 寫成 bach」當成錯誤而不是錯字、有一題 0 個答到卻給 2 分。Gemini 平均 3.8 秒、Groq 5.6 秒；Gemini 10 次批改共約 US$0.014。結論：品質大致相當、沒有輸太多；但 Groq 的額度跟匯入共用，常常在需要備援時已經用完。
   - **兩邊共同的問題比模型差異更大**（要在 6.3 處理）：題目只要「至少一個問題和一個解法」，考生答到了，兩邊都只給 4 分（把詳解列的每一點都當得分點）；不同於詳解的正確做法被扣分；題目沒問的性質被當成漏掉。
 - **隱私權政策已更新（2026-10-19，開發者同意）**：Google Gemini 付費服務改寫成 AI 批改的主要服務，Groq 寫成「可能在 Gemini 暫時無法使用時作為備援」（兩家服務沒變，所以已同意 AI 批改的人不用重新同意，`CONSENT_VERSION` 維持 2）；「只存在手機上」的資料加上首頁的題目來源設定；生效日期改為 10 月 19 日。`kaoyan-coach-legal/privacy.html`（已推上 GitHub Pages，commit 310c2ca）、`隱私權政策_貼到Google文件.txt`（**開發者要重新貼到 Google 文件**，見 T15）、App 的 AI 批改同意說明 `lib/consent.ts`（OTA）。
+- **不加 Groq 備援（2026-10-20，開發者同意）**：開發者問 Gemini 會不會出錯。會（匯入題庫時免費版常回 503「忙碌中」），但付費版到目前沒有失敗過；就算失敗，使用者只會看到「暫時無法使用」，答案已經存好、不算當天次數，稍後再按就好；Groq 的每日額度跟題庫匯入共用，需要備援時常常已經用完。之後真的有人遇到「暫時無法使用」，先讓 Gemini 自己重試一次（同一個模型，評分標準不變），不改用 Groq。
+  - **隱私權政策拿掉 Groq**：第三方只剩 Supabase、Google Gemini 付費服務、Expo，生效日期改為 10 月 20 日。`privacy.html`（已推上 GitHub Pages，commit 11dfb12）、`隱私權政策_貼到Google文件.txt`（**開發者要重新貼到 Google 文件**，見 T15）、`lib/consent.ts` 的 AI 服務只剩「Google Gemini 付費服務」（**2026-10-20 OTA（6ef88059）**）。服務只減少、沒有增加，`CONSENT_VERSION` 維持 2。
+  - **注意**：政策現在靠 `GRADER_PRIMARY=gemini` 這個設定才成立。這個設定被拿掉、或之後要加回 Groq，都要先把 Groq 寫回政策和同意說明，並把 `CONSENT_VERSION` +1（新增服務商要重新徵求同意）。
 
 ### 6.3 批改 prompt 要加的規則
 
